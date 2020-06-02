@@ -1,0 +1,584 @@
+---
+title: "Estimating Bias Induced by Sample Selection: A Comparison of Five Weighting Schemes for a Highly Selected Sample"
+subtitle: "Graphical Comparisons of Weighting Schemes"
+author: "Audrey R Murchland (edited br ERM 1/19/2020)"
+date: "2/4/2019"
+output: 
+  html_document:
+    theme: flatly
+    toc: TRUE
+    toc_float: TRUE
+    toc_depth: 3
+    
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=FALSE, message=FALSE, warning=FALSE)
+```
+
+```{r Pacman statement}
+if (!require("pacman")) install.packages("pacman", repos='http://cran.us.r-project.org'); library(pacman)
+
+p_load("tidyverse", "knitr", "kableExtra", "magrittr", "reshape2", "here", "sas7bdat", "ggplot2", "dplyr", "kableExtra", "tables", "huxtable", "RColorBrewer", "latex2exp","scales", "openxlsx", "grid", "gtable", "gridExtra", "tableone", "Tabstat", "survey")
+
+options(digits = 3)
+```
+#Audrey's To Dos:
+-
+
+```{r Pulling data}
+results <- read.sas7bdat("/Users/emayeda/Box/UCD Health Cognition/Data/ADC-CHIS_DATA/Applied_Weights/all_weights092219.sas7bdat") 
+results$model2 <- factor(results$model2,levels = c("CHIS Weighted", "ADC SuperLearner", "ADC SL GBM", "ADC Logistic","ADC Raked","ADC Unweighted" ))
+
+scaleFUN <- function(x) sprintf("%.2f", x)
+
+results$Labels[results$model2=="ADC Unweighted"] <- "ADC - equal weights" 
+results$Labels[results$model2=="ADC SL GBM"] <- "ADC - sIOSW,\nalgorithm: GBM" 
+results$Labels[results$model2=="ADC Logistic"] <- "ADC - sIOSW,\nalgorithm: logistic regression" 
+results$Labels[results$model2=="ADC Raked"] <- "ADC - raking weights" 
+results$Labels[results$model2=="ADC SuperLearner"] <- "ADC - sIOSW,\nalgorithm: SuperLearner" 
+results$Labels[results$model2=="CHIS Weighted"] <- "CHIS*"
+results$Labels <- factor(results$Labels, levels = c("ADC - equal weights", "ADC - raking weights", "ADC - sIOSW,\nalgorithm: logistic regression" ,"ADC - sIOSW,\nalgorithm: GBM" , "ADC - sIOSW,\nalgorithm: SuperLearner" , "CHIS*" ))
+
+OddsRatios <- results %>% filter(Statistic=='Odds Ratio')
+write.csv(OddsRatios, file="/Users/emayeda/Dropbox/Meena_ERM_MMG/Reweighting_ADC/SAS Output/RWP_Output_03_Analysis/Hypertension/Manuscript_aTables6_092219.csv")
+
+PrevRatios <- results %>% filter(Statistic=='Rel Risk')
+write.csv(PrevRatios, file="/Users/emayeda/Dropbox/Meena_ERM_MMG/Reweighting_ADC/SAS Output/RWP_Output_03_Analysis/Hypertension/Manuscript_aTables7_092219.csv")
+
+
+```
+#Comparisons of Applied Weighting Schemes
+
+##Odds Ratios
+<br>
+<br>
+```{r Odds Ratio Plots, echo=FALSE, fig.align="center", fig.width=7, fig.height=5}
+OddsRatios$textY = 0.60
+OddsRatios_m <- OddsRatios %>% mutate(LowerCL_l = ifelse(LowerCL < 0.80, 0.80, LowerCL), UpperCL_l = ifelse(UpperCL > 4.1, 4.1, UpperCL), 
+                                      UpperCL_d = ifelse(UpperCL > 4.1, 4.1, NA))
+
+or <- ggplot(OddsRatios_m, aes(x=Labels, y=Value)) + 
+   geom_point(size = 10, alpha = 0.75, aes(fill=model3),colour="black", pch=21) +
+    theme(aspect.ratio = 2) +
+    geom_errorbar(aes(ymin=LowerCL_l, ymax=UpperCL_l),
+                  size=.8,    # Thinner lines
+                  width=.2, 
+                  position=position_dodge(.9)) +
+    labs(x="", y="Estimated Odds Ratio (95% CI)") + 
+    ggtitle("Hypertension Odds Ratios based on each weighting scheme") +
+   scale_y_continuous(trans = "log", breaks=c(0.8,1.0,1.2,1.5,1.8,2.2,2.7,3.3,4.1), labels=scaleFUN, limit=c(0.8,4.1),expand=c(0,0), minor_breaks=NULL) +
+    guides(fill=FALSE) +
+  scale_fill_manual(values=c("G1"="white", "G2"="red1", "G3"="turquoise1","G4"="gold1","G6"="orchid1","G5"="black")) +
+    theme_bw() +
+    geom_text(aes(label=scaleFUN(Value)),hjust=.50, vjust=-1.25, size=6) + 
+    theme(axis.text.x = element_text(angle = 0, hjust = 0.5, size=17, color="black"), plot.title = element_text(hjust=0.5), axis.text.y=element_text(size=20, color="black")) +
+    geom_hline(yintercept=1) + 
+  scale_x_discrete(limits=rev(levels(OddsRatios$Labels))) +
+  coord_flip() + 
+  theme(panel.spacing= unit(3.0, "lines"))+
+  theme(axis.text.y = element_text(hjust = 0)) + 
+  facet_wrap(~ Group) +
+  geom_segment(aes(x = 2, xend = 2, y = Value, yend = UpperCL_d), arrow = arrow(length = unit(0.5, "cm")))
+ # geom_segment(aes(x = 4, xend = 4, y = Value, yend = UpperCL_d), arrow = arrow(length = unit(0.5, "cm")))
+  
+
+or2 <- or + theme(strip.text = element_text(size=23),
+plot.title = element_text(color="black", size=25, face="bold"),
+axis.title.x = element_text(color="black", size=23, vjust=-3.0),
+axis.title.y = element_text(color="black", size=16),
+plot.margin = margin(1,1,1,.1,"cm"), plot.background = element_rect(fill="white")
+)
+
+plot(or2)
+
+aspect_ratio <- 1.5
+ggsave(filename='/Users/emayeda/Dropbox/Meena_ERM_MMG/Reweighting_ADC/SAS Output/RWP_Output_03_Analysis/Hypertension/PLOTS/OR_092219.png', plot=or2, height=7,width = 10 * aspect_ratio  )
+
+```
+<br>
+<br>
+
+##Prevalence Ratios
+<br>
+<br>
+```{r Prevalence Ratio Plots, echo=FALSE, fig.align="center", out.width="75%", out.height="75%"}
+PrevRatios$textY = 0.90
+pr <- ggplot(PrevRatios, aes(x=Labels, y=Value)) + 
+     geom_point(size = 10, alpha = 0.75, aes(fill=model3),colour="black", pch=21)+
+    theme(aspect.ratio = 2) +
+    geom_errorbar(aes(ymin=LowerCL, ymax=UpperCL),
+                  size=.8,    # Thinner lines
+                  width=.2,
+                  position=position_dodge(.9)) +
+    labs(x="", y="Estimated Prevalence Ratio (95% CI)") +
+    ggtitle("Hypertension Prevalence Ratios based on each weighting scheme") +
+     scale_y_continuous(trans = "log", breaks=c(0.8,1.0,1.2,1.5,1.8,2.2), labels=scaleFUN, limit=c(0.8,2.2),expand=c(0,0), minor_breaks=NULL) +
+    guides(fill=FALSE) +
+  scale_fill_manual(values=c("G1"="white", "G2"="red1", "G3"="turquoise1","G4"="gold1","G6"="orchid1","G5"="black")) +
+    theme_bw() +
+       geom_text(aes(label=scaleFUN(Value)),hjust=.50, vjust=-1.25, size=6) +  
+    theme(axis.text.x = element_text(angle = 0, hjust = 0.5, size=17, color="black"), plot.title = element_text(hjust=0.5), axis.text.y=element_text(size=20, color="black")) +
+    geom_hline(yintercept=1) + 
+  scale_x_discrete(limits=rev(levels(PrevRatios$Labels))) +
+  coord_flip() + 
+  theme(panel.spacing= unit(3.0, "lines"))+
+  theme(axis.text.y = element_text(hjust = 0)) + 
+  facet_wrap(~ Group) 
+ # geom_segment(aes(x = 2, xend = 2, y = Value, yend = UpperCL_d), arrow = arrow(length = unit(0.5, "cm")))+
+ # geom_segment(aes(x = 4, xend = 4, y = Value, yend = UpperCL_d), arrow = arrow(length = unit(0.5, "cm")))
+
+
+pr2 <- pr + theme(strip.text = element_text(size=23),
+plot.title = element_text(color="black", size=25, face="bold"),
+axis.title.x = element_text(color="black", size=23, vjust=-3.0),
+axis.title.y = element_text(color="black", size=16),
+plot.margin = margin(1,1,1,.1,"cm"), plot.background = element_rect(fill = "white")
+)
+
+plot(pr2)
+
+aspect_ratio <- 1.5
+ggsave(filename='/Users/emayeda/Dropbox/Meena_ERM_MMG/Reweighting_ADC/SAS Output/RWP_Output_03_Analysis/Hypertension/PLOTS/PR_092219.png', plot=pr2,  height=7,width = 10 * aspect_ratio )
+```
+<br>
+<br>
+
+##Prevalence Differences
+```{r Prev Diff Data}
+resultspd <- read.sas7bdat("/Users/audreymurchland/Box Sync/UCD Health Cognition/Data/ADC-CHIS_DATA/Applied_Weights/all_weights092219.sas7bdat")
+resultspd$model2 <- factor(resultspd$model2,levels = c("CHIS Weighted", "ADC SuperLearner", "ADC SL GBM", "ADC Logistic","ADC Raked","ADC Unweighted" ))
+
+scaleFUN <- function(x) sprintf("%.1f", x)
+
+resultspd$Labels[resultspd$model2=="ADC Unweighted"] <- "ADC - equal weights" 
+resultspd$Labels[resultspd$model2=="ADC SL GBM"] <- "ADC - sIOSW,\nalgorithm: GBM" 
+resultspd$Labels[resultspd$model2=="ADC Logistic"] <- "ADC - sIOSW,\nalgorithm: logistic regression" 
+resultspd$Labels[resultspd$model2=="ADC Raked"] <- "ADC - raking weights" 
+resultspd$Labels[resultspd$model2=="ADC SuperLearner"] <- "ADC - sIOSW,\nalgorithm: SuperLearner" 
+resultspd$Labels[resultspd$model2=="CHIS Weighted"] <- "CHIS*"
+resultspd$Labels <- factor(resultspd$Labels, levels = c("ADC - equal weights", "ADC - raking weights", "ADC - sIOSW,\nalgorithm: logistic regression" ,"ADC - sIOSW,\nalgorithm: GBM" , "ADC - sIOSW,\nalgorithm: SuperLearner" , "CHIS*" ))
+
+PrevDiff <- resultspd %>% filter(Statistic=='Risk Diff')
+
+PrevDiff$Value2 <- PrevDiff$Value*100
+PrevDiff$LowerCL2 <- PrevDiff$LowerCL*100
+PrevDiff$UpperCL2 <- PrevDiff$UpperCL*100
+write.csv(PrevDiff, file="/Users/emayeda/Dropbox/Meena_ERM_MMG/Reweighting_ADC/SAS Output/RWP_Output_03_Analysis/Hypertension/Manuscript_aTables8_092219.csv")
+
+
+```
+<br>
+<br>
+```{r Prevalence Difference Plots, echo=FALSE, fig.align="center", out.width="75%", out.height="75%"}
+PrevDiff$textY = -6.5
+PrevDiff_m <- PrevDiff %>% mutate(LowerCL_l = ifelse(LowerCL < -.10, -.10, LowerCL), UpperCL_l = ifelse(UpperCL > .30, .30, UpperCL), 
+                                      UpperCL_d = ifelse(UpperCL > .30, .30, NA))
+
+#Creating Datasets for CI arrows for Black participants only (have to apply after doing facet wrap)
+#Black UCL Logistic
+data.seglg<-data.frame(x=4, xend=4, y=19.4, yend = 30.0, Group="Black", model3="G2")
+#Black UCL GBM
+data.seggbm<-data.frame(x=3, xend=3, y=15.0, yend = 30.0, Group="Black", model3="G6")
+
+pd <- ggplot(PrevDiff_m, aes(x=Labels, y=Value*100, fill=model3)) + 
+   geom_point(size = 10, alpha = 0.75, aes(fill=model3),colour="black", pch=21)+
+    theme(aspect.ratio = 2) +
+    geom_errorbar(aes(ymin=LowerCL_l*100, ymax=UpperCL_l*100),
+                  size=.8,    # Thinner lines
+                  width=.2,
+                  position=position_dodge(.9)) +
+    labs(x="", y="Estimated Prevalence Difference (95% CI)") +
+    ggtitle("Hypertension Prevalence Differences based on each weighting scheme") +
+    scale_y_continuous(breaks=seq(-10,30,5), labels=scaleFUN, limit=c(-10,30),expand=c(0,0), minor_breaks =NULL) +
+    theme_bw() +
+    guides(fill=FALSE) +
+    scale_fill_manual(values=c("G1"="white", "G2"="red1", "G3"="turquoise1","G4"="gold1","G6"="orchid1","G5"="black")) +
+  theme_bw()+
+    geom_text(aes(label=scaleFUN(Value*100)),hjust=.50, vjust=-1.25, size=6) + 
+    theme(axis.text.x = element_text(angle = 0, hjust = 0.5, size=17, color="black"), plot.title = element_text(hjust=0.5), axis.text.y=element_text(size=18, color="black")) +
+  geom_hline(yintercept=0) + 
+  scale_x_discrete(limits=rev(levels(PrevDiff$Labels))) +
+  coord_flip() + 
+  theme(panel.spacing= unit(3.0, "lines"))+
+  theme(axis.text.y = element_text(hjust = 0)) + 
+  #geom_segment(aes(x = 3, xend = 3, y = Value*100, yend = UpperCL_d*100), arrow = arrow(length = unit(0.5, "cm")))  +
+  geom_segment(aes(x = 2, xend = 2, y = Value*100, yend = UpperCL_d*100), arrow = arrow(length = unit(0.5, "cm"))) +
+  facet_wrap(~ Group) +
+  geom_segment(data=data.seglg, 
+               aes(x = x, xend = xend, y = y, yend = yend), inheret.aes=FALSE, arrow = arrow(length = unit(0.5, "cm"))) + 
+  geom_segment(data=data.seggbm, 
+               aes(x = x, xend = xend, y = y, yend = yend), inheret.aes=FALSE, arrow = arrow(length = unit(0.5, "cm")))
+
+pd2 <- pd + theme(strip.text = element_text(size=23),
+plot.title = element_text(color="black", size=25, face="bold", vjust = 3.0),
+axis.title.x = element_text(color="black", size=23, vjust=-3.0),
+axis.title.y = element_text(color="black", size=16), 
+plot.margin = margin(1,1,1,.1, "cm"), plot.background = element_rect(fill="white")
+)
+
+plot(pd2)
+aspect_ratio <- 1.5
+ggsave(filename='/Users/audreymurchland/Dropbox/Meena_ERM_MMG/Reweighting_ADC/SAS Output/RWP_Output_03_Analysis/Hypertension/PLOTS/PD_092219_AM.png', plot=pd2, height=7,width = 10 * aspect_ratio )
+
+```
+<br>
+<br>
+
+##Prevalences
+```{r Prev Data}
+Prev <- results %>% filter(Statistic=='Prevalence')
+scaleFUN <- function(x) sprintf("%.1f", x)
+
+write.csv(Prev, file="/Users/emayeda/Dropbox/Meena_ERM_MMG/Reweighting_ADC/SAS Output/RWP_Output_03_Analysis/Hypertension/Manuscript_aTables5_092219.csv")
+
+```
+<br>
+<br>
+```{r Prevalence Plots, echo=FALSE, fig.align="center", out.width="75%", out.height="75%"}
+Prev$textY = 43
+p <- ggplot(Prev, aes(x=Labels, y=Value, fill=model3)) + 
+  geom_point(size = 6, alpha = 0.75, aes(fill=model3),colour="black", pch=21) +
+    theme(aspect.ratio = 2) +
+    geom_errorbar(aes(ymin=LowerCL, ymax=UpperCL),
+                  size=.8,    # Thinner lines
+                  width=.2, 
+                  position=position_dodge(.9)) +
+    labs(x="",y="Estimated Prevalence (95% CI)") +
+    ggtitle("Estimated Prevalence of Hypertension based on each weighting scheme") +
+    scale_y_continuous(limit=c(40,90),expand=c(0,0),labels=scaleFUN, oob = rescale_none, minor_breaks = NULL) +
+      guides(fill=FALSE) +
+  scale_fill_manual(values=c("G1"="white", "G2"="red1", "G3"="turquoise1","G4"="gold1","G6"="orchid1","G5"="black")) +
+    theme_bw() +
+   geom_text(aes(label=scaleFUN(Value)),hjust=.50, vjust=-1.25, size=6) + 
+    theme(axis.text.x = element_text(angle = 0, hjust = 0.5, size=17, color="black"), plot.title = element_text(hjust=0.5), axis.text.y=element_text(size=20, color="black")) +
+   geom_hline(yintercept=40) + 
+  scale_x_discrete(limits=rev(levels(Prev$Labels))) +
+  coord_flip() + 
+  theme(panel.spacing= unit(3.0, "lines"))+
+  theme(axis.text.y = element_text(hjust = 0)) + 
+  facet_wrap(~ Group)
+
+p2 <- p + theme(strip.text = element_text(size=23),
+plot.title = element_text(color="black", size=25, face="bold"),
+axis.title.x = element_text(color="black", size=23, vjust=-3.0),
+axis.title.y = element_text(color="black", size=16),
+plot.margin = margin(1,1,1,.1,"cm"), plot.background = element_rect(fill="white")
+)
+
+plot(p2)
+
+aspect_ratio <- 1.5
+ggsave(filename='/Users/emayeda/Dropbox/Meena_ERM_MMG/Reweighting_ADC/SAS Output/RWP_Output_03_Analysis/Hypertension/PLOTS/Prev_092219.png', plot=p2, height=7,width = 10 * aspect_ratio )
+```
+<br>
+<br>
+
+#Areas of Common Support
+In this section, we evaluate potential positivity violations using density plots showing propensity score overlap. The current graphs below show the distribution of the weights for each weighting scheme. They need to be updated with the propensity score instead of the weights.
+```{r ACS Data}
+density <-read.sas7bdat ("/Users/emayeda/Box/UCD Health Cognition/Data/ADC-CHIS_DATA/weights_comb_short_092219.sas7bdat")
+```
+<br>
+<br>
+
+##Logistic Propensity Balance
+-make text larger (numeric values)
+-more space between x-axis labels and x-axis numbering
+-once all are plotted, then determine scale range
+-consider knitting together three plots (stacked vertically) > all three should fit on one page, with room for title, space between, and footnotes
+
+```{r Overall ACS Plot, echo=FALSE, fig.align="center", out.width="75%", out.height="75%"}
+density$adclog[density$adc==0] <- " CHIS participant" 
+density$adclog[density$adc==1] <- " ADC  participant"
+density$adclog <- factor(density$adclog,levels = c(" ADC  participant"," CHIS participant"))
+density$IP_2 <- density$IP_1*(4622757/856) #we are multiplying the propensity scores by the ratio of sample sizes for interpretability -- ERM note 1/21/2020: CHIS weighted sample size updated.
+
+denlog<-ggplot(density, aes(x = IP_2, fill = adclog)) + geom_density(alpha = 0.5) + 
+    labs(x="rescaled propensity score for ADC participation \nestimated from logistic regression", y="density")+
+  scale_x_continuous(limit=c(0,20),expand=c(0,0), oob = rescale_none, minor_breaks = NULL) +
+   scale_y_continuous(breaks=c(0.0,0.5,1.0,1.5,2.0), limit=c(0,2.0),expand=c(0,0), minor_breaks=NULL) +
+   scale_fill_manual(values=c(" CHIS participant" ="grey88", " ADC  participant"="red1")) +
+ geom_text (x=0, y=2.25, inherit.aes=FALSE, label="A.", check_overlap=TRUE, hjust=0, size=6) +
+  #"Density Plot of Propensity Scores for ADC Participation \n estimated from logistic regression"
+  coord_cartesian(clip = "off") +
+  theme_bw()
+
+denlog2 <- denlog + theme(strip.text = element_text(size=15),
+plot.title = element_text(color="black", face="bold"),
+axis.title.x = element_text(color="black", size=16, vjust=-1.5),
+axis.text.x = element_text(size=12),
+axis.title.y = element_text(color="black", size=16),
+axis.text.y = element_text(size=12),
+legend.title=element_blank(), legend.position = c(.85,.75), legend.text = element_text(size=14),
+plot.margin = margin(4,1,1,.1,"cm"), plot.background = element_rect(fill="white")
+)
+
+plot(denlog2)
+
+aspect_ratio <- 1.25
+ggsave(filename='/Users/emayeda/Dropbox/Meena_ERM_MMG/Reweighting_ADC/SAS Output/RWP_Output_03_Analysis/Hypertension/PLOTS/Den_Log_092219.png', plot=denlog2, height=7,width = 8 * aspect_ratio  )
+
+```
+<br>
+<br>
+
+
+##GBM Propensity Balance
+```{r GBM ACS Plot, echo=FALSE, fig.align="center", out.width="75%", out.height="75%"}
+
+density$adcgbm[density$adc==0] <- " CHIS participant" 
+density$adcgbm[density$adc==1] <- " ADC  participant"
+density$adcgbm <- factor(density$adcgbm,levels = c(" ADC  participant"," CHIS participant"))
+density$pp2_ADC2 <- density$pp2_ADC*(4622757/856) #we are multiplying the propensity scores by the ratio of sample sizes for interpretability -- ERM note 1/21/2020: CHIS weighted sample size updated.
+
+dengbm<-ggplot(density, aes(x = pp2_ADC2, fill = adcgbm)) + geom_density(alpha = 0.5) + 
+    labs(x="rescaled propensity score for ADC participation \nestimated from GBM", y="density") +
+    scale_x_continuous(limit=c(0,20),expand=c(0,0), oob = rescale_none, minor_breaks = NULL) +
+  scale_y_continuous(breaks=c(0.0,0.5,1.0,1.5,2.0), limit=c(0,2.0),expand=c(0,0), minor_breaks=NULL) +
+   scale_fill_manual(values=c(" CHIS participant" ="grey88", " ADC  participant"="orchid1")) +
+ geom_text (x=0, y=2.25, inherit.aes=FALSE, label="B.", check_overlap=TRUE, hjust=0, size=6) +
+  #"Density Plot of Propensity Scores for ADC Participation \n estimated from logistic regression"
+  coord_cartesian(clip = "off") +
+  theme_bw()
+
+dengbm2 <- dengbm + theme(strip.text = element_text(size=15),
+plot.title = element_text(color="black", face="bold"),
+axis.title.x = element_text(color="black", size=16, vjust=-1.5),
+axis.text.x = element_text(size=12),
+axis.title.y = element_text(color="black", size=16),
+axis.text.y = element_text(size=12),
+legend.title=element_blank(), legend.position = c(.85,.75), legend.text = element_text(size=14),
+plot.margin = margin(4,1,1,.1,"cm"), plot.background = element_rect(fill="white")
+)
+
+plot(dengbm2)
+
+aspect_ratio <- 1.25
+ggsave(filename='/Users/emayeda/Dropbox/Meena_ERM_MMG/Reweighting_ADC/SAS Output/RWP_Output_03_Analysis/Hypertension/PLOTS/Den_GBM_092219.png', plot=dengbm2, height=7,width = 8 * aspect_ratio  )
+
+
+```
+<br>
+<br>
+
+##SuperLearner Propensity Balance
+```{r SL ACS Plot, echo=FALSE, fig.align="center", out.width="75%", out.height="75%"}
+
+density$adcsl[density$adc==0] <- " CHIS participant" 
+density$adcsl[density$adc==1] <- " ADC  participant"
+density$adcsl <- factor(density$adcsl,levels = c(" ADC  participant", " CHIS participant"))
+density$pp_SL2 <- density$pp_SL*(4622757/856) #we are multiplying the propensity scores by the ratio of sample sizes for interpretability -- ERM note 1/21/2020: CHIS weighted sample size updated.
+
+densl<-ggplot(density, aes(x = pp_SL2, fill = adcsl)) + geom_density(alpha = 0.5) + 
+    labs(x="rescaled propensity score for ADC participation \nestimated from SuperLearner", y="density") +
+    scale_x_continuous(limit=c(0,20),expand=c(0,0), oob = rescale_none, minor_breaks = NULL) +
+  scale_y_continuous(breaks=c(0.0,0.5,1.0,1.5,2.0), limit=c(0,2.0),expand=c(0,0), minor_breaks=NULL) +
+   scale_fill_manual(values=c(" CHIS participant" ="grey88", " ADC  participant"="gold1")) +
+   geom_text (x=0, y=2.25, inherit.aes=FALSE, label="C.", check_overlap=TRUE, hjust=0, size=6) +
+  #"Density Plot of Propensity Scores for ADC Participation \n estimated from logistic regression"
+  coord_cartesian(clip = "off") +
+  theme_bw()
+
+
+densl2 <- densl + theme(strip.text = element_text(size=15),
+plot.title = element_text(color="black", face="bold"),
+axis.title.x = element_text(color="black", size=16, vjust=-1.5),
+axis.text.x = element_text(size=12),
+axis.title.y = element_text(color="black", size=16),
+axis.text.y = element_text(size=12),
+legend.title=element_blank(), legend.position = c(.85,.75), legend.text = element_text(size=14),
+plot.margin = margin(4,1,1,.1,"cm"), plot.background = element_rect(fill="white")
+)
+
+plot(densl2)
+
+aspect_ratio <- 1.25
+ggsave(filename='/Users/emayeda/Dropbox/Meena_ERM_MMG/Reweighting_ADC/SAS Output/RWP_Output_03_Analysis/Hypertension/PLOTS/Den_SL_092219.png', plot=densl2, height=7,width = 8 * aspect_ratio  )
+
+##ADD Footnote at the bottom of all three that we have trimmed the scale from 0-20!!
+```
+
+
+```{r Comb Den Plot, echo=FALSE, fig.align="center", out.width="75%", out.height="75%"}
+g <- grid.arrange(denlog2,dengbm2,densl2,ncol=1)
+aspect_ratio <- 1.25
+ggsave(filename='/Users/emayeda/Dropbox/Meena_ERM_MMG/Reweighting_ADC/SAS Output/RWP_Output_03_Analysis/Hypertension/PLOTS/Den_ALL_092219.png', plot=g, height=12,width = 6 * aspect_ratio  )
+
+```
+<br>
+<br>
+
+#Covariate Balance Plots
+
+```{r Cov Balance Plot, echo=FALSE, fig.align="center", out.width="75%", out.height="75%"}
+df1<-read.xlsx("/Users/emayeda/Dropbox/Meena_ERM_MMG/Reweighting_ADC/SAS Output/RWP_Output_03_Analysis/Hypertension/Diagnostics_SEseize_FULL_092219.xlsx")
+
+df1$Group[df1$Group=="GBM"] <- "sIOSW,\nalgorithm: GBM" 
+df1$Group[df1$Group=="LOGSLPT2"] <- "sIOSW,\nalgorithm: Logistic regression" 
+df1$Group[df1$Group=="RAKED"] <- "Raking weights" 
+df1$Group[df1$Group=="SL"] <- "sIOSW,\nalgorithm: SuperLearner" 
+df1$Group2 <- factor(df1$Group, levels = c("Raking weights", "sIOSW,\nalgorithm: Logistic regression" ,"sIOSW,\nalgorithm: GBM" , "sIOSW,\nalgorithm: SuperLearner"))
+
+df1$Covariate = factor(df1$Covariate,levels = c("Congestive heart failure",
+                                              "Married/Living with partner",
+                                              "Male",
+                                              "English only",
+                                              "Grade 9-11",
+                                              "College degree/Post graduate",
+                                              "Stroke",
+                                              "Some college",
+                                              "Both English and Spanish",
+                                              "Grade 12/High school diploma",
+                                              "Heart disease",
+                                              "Latino",
+                                              "No formal education",
+                                              "Grade 1-8",
+                                              "Hypertension",
+                                              "Spanish only",
+                                              "BMI",
+                                              "Diabetes",
+                                              "Age",
+                                              "White",
+                                              "Hypercholesterolemia",
+                                              "Black"
+                                           
+))
+
+CVB <- ggplot(df1, aes(x=Covariate, y=abs(Effect.Size)), group=Model) + 
+  facet_wrap(~Group2, nrow = 1) + 
+  geom_point(size=3, aes(colour=factor(Model), shape=factor(Model), fill=factor(Model))) +
+  ylab("Absolute standardized mean difference") +
+  # ggtitle("Covariate Balance") + 
+   scale_y_continuous(breaks=c(0.0,0.2,0.4,0.6,0.8,1.0), limit=c(0,1.0), minor_breaks=NULL) +
+   scale_shape_manual(values=c("LOGSLPT2"=24,"GBM"=24,"SL"=24,"RAKED"=24,"Unweighted"=1)) +
+  scale_colour_manual(values=c("black","black","black","black","black")) +
+  scale_fill_manual(values=c("Unweighted"="white", "LOGSLPT2"="red1","GBM"="orchid1", "SL"="gold1", "RAKED"="turquoise1")) + 
+  theme_bw() +
+  theme(axis.title.y=element_blank()) + 
+  theme(legend.position = "none") + 
+  theme(aspect.ratio = 5/3) +
+  coord_flip()
+
+CVB2 <- CVB + theme(strip.text = element_text(size=18),
+axis.title.x = element_text(color="black", size=20, vjust=-3.0),
+axis.text.x = element_text(size=18),
+axis.text.y = element_text(size=18),
+plot.margin = margin(.25,.25,.25,.25,"cm"), plot.background = element_rect(fill="white"))
+
+plot(CVB2)
+
+ggsave(filename='/Users/emayeda/Dropbox/Meena_ERM_MMG/Reweighting_ADC/SAS Output/RWP_Output_03_Analysis/Hypertension/PLOTS/CovBalance_FULL_092219.png', plot=CVB2, width = 18, height=8, dpi=800  )
+
+```
+
+#Manuscript Tables
+##Manuscript Table 1
+Characteristics of the Aging Diversity Cohort (ADC) and California Health Interview Survey (CHIS), displayed as mean (SD)
+```{r aTable 1, echo=FALSE, fig.align="center", out.width="75%", out.height="75%"}
+
+covtabs <- read.sas7bdat("/Users/audreymurchland/Box Sync/UCD Health Cognition/Data/ADC-CHIS_DATA/weights_comb_092219.sas7bdat")
+
+dput(names(covtabs))
+
+##categorical comparison variable
+covtabs$racegrp[covtabs$race==1 & covtabs$adc==1] <- "ADC Black"
+covtabs$racegrp[covtabs$race==2 & covtabs$adc==1] <- "ADC Latino"
+covtabs$racegrp[covtabs$race==3 & covtabs$adc==1] <- "ADC White"
+covtabs$racegrp[covtabs$race==1 & covtabs$adc==0] <- "CHIS Black"
+covtabs$racegrp[covtabs$race==2 & covtabs$adc==0] <- "CHIS Latino"
+covtabs$racegrp[covtabs$race==3 & covtabs$adc==0] <- "CHIS White"
+covtabs$racegrp <- factor(covtabs$racegrp, levels = c("ADC Black", "ADC Latino", "ADC White", "CHIS Black", "CHIS Latino", "CHIS White"))
+
+##vector of variables to summarize
+tab1vars <- c("Nage", "male","lang_eng", "lang_span", "lang_both", "edu1_noed", "edu1_elem", 
+"edu1_somehs", "edu1_hs", "edu1_somecol", "edu1_colpostgrad", "marry_bi","stroke","diabetes","Hypertension","HeartDz","CongestiveHeart","Cholesterol","BMI")
+
+##vector of categorical variables
+catVars <- c("language1","Edu_harm1")
+
+chissvy <- svydesign (ids= ~ covtabs$ID, weights= covtabs$RAKEDW0, nest = TRUE, data = covtabs)
+atab1 <- svyCreateTableOne(vars=tab1vars, strata = "racegrp", data = chissvy)
+
+atab2 <- CreateTableOne(vars=tab1vars, strata = "racegrp", data = covtabs)
+atab2
+
+atab1Mat <- print(atab1, quote = FALSE, noSpaces = TRUE, printToggle = FALSE)
+
+write.csv(atab1Mat, file="/Users/emayeda/Dropbox/Meena_ERM_MMG/Reweighting_ADC/SAS Output/RWP_Output_03_Analysis/Hypertension/Manuscript_Table1_092219.csv")
+```
+
+##Manuscript Table 2
+Distribution of stabilized weights for Aging Diversity Cohort (ADC) participants
+```{r aTable 2, echo=FALSE, fig.align="center", out.width="75%", out.height="75%"}
+#Issues creating this table in R, please refer to SAS code instead
+
+covtabs <- read.sas7bdat("/Users/emayeda/Box/UCD Health Cognition/Data/ADC-CHIS_DATA/weights_comb_092219.sas7bdat")
+
+
+```
+
+#Appendix Tables
+##Appendix Table 3
+Distribution of stabilized weights for Aging Diversity Cohort (ADC) participants
+```{r aTable 2, echo=FALSE, fig.align="center", out.width="75%", out.height="75%"}
+#Issues creating this table in R, please refer to SAS code instead
+
+
+```
+
+##Deleted Appendix Table
+Table 1 descriptive stats for each weighted data set (table was very overwhelming-- 3x as wide as Appendix Table 3 (3 columns per weighting scheme))
+```{r aTable 2, echo=FALSE, fig.align="center", out.width="75%", out.height="75%"}
+atab3 <- read.sas7bdat("/Users/emayeda/Box/UCD Health Cognition/Data/ADC-CHIS_DATA/weights_comb_092219.sas7bdat")
+
+##categorical comparison variable
+atab3$racegrp[atab3$race==1 & atab3$adc==1] <- "ADC Black"
+atab3$racegrp[atab3$race==2 & atab3$adc==1] <- "ADC Latino"
+atab3$racegrp[atab3$race==3 & atab3$adc==1] <- "ADC White"
+atab3$racegrp <- factor(atab3$racegrp, levels = c("ADC Black", "ADC Latino", "ADC White"))
+
+##vector of variables to summarize
+tab1vars <- c("Nage", "male","lang_eng", "lang_span", "lang_both", "edu1_noed", "edu1_elem", 
+"edu1_somehs", "edu1_hs", "edu1_somecol", "edu1_colpostgrad", "marry_bi","stroke","diabetes","HeartDz","CongestiveHeart","Cholesterol","BMI")
+
+#creating raked weighted dataset
+rakwts <- svydesign (ids= ~ atab3$ID, weights= atab3$RAK_WT, nest = TRUE, data = atab3)
+atab3_rakwts <- svyCreateTableOne(vars=tab1vars, strata = "racegrp", data = rakwts)
+
+atab3_rakwts
+
+atab3_rakwtsMat <- print(atab3_rakwts, quote = FALSE, noSpaces = TRUE, printToggle = FALSE)
+
+write.csv(atab3_rakwtsMat, file="/Users/emayeda/Dropbox/Meena_ERM_MMG/Reweighting_ADC/SAS Output/RWP_Output_03_Analysis/Hypertension/Manuscript_unused_Table1_rak_092219.csv")
+
+#creating logistic regression weighted dataset
+logwts <- svydesign (ids= ~ atab3$ID, weights= atab3$LOG_WT, nest = TRUE, data = atab3)
+atab3_logwts <- svyCreateTableOne(vars=tab1vars, strata = "racegrp", data = logwts)
+
+atab3_logwts
+
+atab3_logwtsMat <- print(atab3_logwts, quote = FALSE, noSpaces = TRUE, printToggle = FALSE)
+
+write.csv(atab3_logwtsMat, file="/Users/emayeda/Dropbox/Meena_ERM_MMG/Reweighting_ADC/SAS Output/RWP_Output_03_Analysis/Hypertension/Manuscript_unused_Table1_log_092219.csv")
+
+#creating GBM weighted dataset
+gbmwts <- svydesign (ids= ~ atab3$ID, weights= atab3$GBM_WT, nest = TRUE, data = atab3)
+atab3_gbmwts <- svyCreateTableOne(vars=tab1vars, strata = "racegrp", data = gbmwts)
+
+atab3_gbmwts
+
+atab3_gbmwtsMat <- print(atab3_gbmwts, quote = FALSE, noSpaces = TRUE, printToggle = FALSE)
+
+write.csv(atab3_gbmwtsMat, file="/Users/emayeda/Dropbox/Meena_ERM_MMG/Reweighting_ADC/SAS Output/RWP_Output_03_Analysis/Hypertension/Manuscript_unused_Table1_gbm_092219.csv")
+
+#creating SL weighted dataset
+slwts <- svydesign (ids= ~ atab3$ID, weights= atab3$SL_WT, nest = TRUE, data = atab3)
+atab3_slwts <- svyCreateTableOne(vars=tab1vars, strata = "racegrp", data = slwts)
+
+atab3_slwts
+
+atab3_slwtsMat <- print(atab3_slwts, quote = FALSE, noSpaces = TRUE, printToggle = FALSE)
+
+write.csv(atab3_slwtsMat, file="/Users/emayeda/Dropbox/Meena_ERM_MMG/Reweighting_ADC/SAS Output/RWP_Output_03_Analysis/Hypertension/Manuscript_unused_Table1_sl_092219.csv")
+
+```
