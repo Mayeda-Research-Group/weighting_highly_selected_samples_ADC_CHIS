@@ -42,6 +42,6 @@ Scrips for the project "Accounting for selection probabilities in dementia resea
 
 	This script runs the Twang macro to calculate covariance balance statistics. 
 
-11) 04_RWP_Graphs_042419_ERM.Rmd
+11) 04_RWP_Graphs_092219_erm.Rmd
 
 	This script uses the output from the applied weighting schemes and covariate balance macro to create manuscript tables and graphs. 
