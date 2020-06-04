@@ -124,7 +124,7 @@ proc freq data=adult60_CHISa; table SRH SRW SRAA SRH*SRW SRH*SRAA SRW*SRAA; run;
 proc freq data=adult60_CHISa; table SRH SRW SRAA RACEHPR OMBSRREO SRAA*RACEHPR SRAA*OMBSRREO; run;
 proc freq data = adult60_CHISa; tables RACEHPR OMBSRREO racedof SRH SRAA SRW RACEHPR*(SRH SRAA SRW); run;
 /*ERM on 9/20/19: Meena's original code restricted to people who were Black, Latino, or White, but ONLY one of the three categories. This resulted in dropping approximately 50% of people who identified as Latino.
-I reviewed the CHIS race varaibles RACEDOF (Race – Former Department of Finance Definition), OMBSERRO (OMB Self-Reported Race Ethnicity), and RACEHPR (Race – UCLA CHPR Definition) -- I reviwed the response frequencies
+I reviewed the CHIS race varaibles RACEDOF (Race â€“ Former Department of Finance Definition), OMBSERRO (OMB Self-Reported Race Ethnicity), and RACEHPR (Race â€“ UCLA CHPR Definition) -- I reviwed the response frequencies
 and I reviewed CHIS documenation (2005PUF_constructs_a.pdf and CHIS2005_adult_q.pdf documentation). I considered using the RACEHPR variable, since it's the UCLA CHPR definition, but I don't particularly like the question
 about racial/ethnic group people identify with most, since it means we drop people who identify as multi-racial and the description of the coding is a little confusing. So we will code participants as Latino if they
 identified as Latino. For non-Latinos, we will code participants as Black/African American if they identify as Black and we will identify participants as White if they identify as White (but participants who identify
