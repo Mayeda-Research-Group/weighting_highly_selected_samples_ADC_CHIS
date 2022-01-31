@@ -2,6 +2,7 @@
 # Raking
 # Kristina Van Dang
 # January 26, 2022
+# Script name "Raking_26Jan2022.R"
 
 # This code produces the weights of being in ADC using raking
 
