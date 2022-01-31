@@ -1,35 +1,33 @@
-# Raking_v6
-# Sept. 22, 2019
-# Kristina Dang
+# Reweighting for Highly Selected Samples
+# Raking
+# Kristina Van Dang
+# January 26, 2022
 
-# With this new dataset, we will be correcting the cholesterol raked vars (if needed)
-# 1) send just demographic vars to Audrey to check covariate balance
-# 2) if any covariates have poor balance, rake on those as well
+# This code produces the weights of being in ADC using raking
 
 rm(list=ls())
-library(weights)
-library(survey)
+
+library(weights) # Raking; weights_1.0.4
+library(survey) # Raking; survey_4.1-1
 library(dplyr)
 
-setwd("/Users/kristinadang/Box Sync/UCD Health Cognition/Data/ADC-CHIS_DATA")
+setwd("C:/Users/ehlarson/Box/KD_bootstrapping/hoffman_cluster/data")
 dir()
 
 df1<-read.csv("adc_chis2_am_09.csv")  
 
-# Need to create categorical variables because raking doesn't work on cont vars
+# ---- Data management -----
+# Need to create categorical variables because raking doesn't work on continuous vars
 # BMI categories
 df1$bmilt25 <- ifelse(df1$BMI < 25, 1, 0)
 df1$bmi2530 <- ifelse(df1$BMI >= 25 & df1$BMI < 30, 1, 0)
 df1$bmige30 <- ifelse(df1$BMI >= 30, 1, 0)
 
-# Create age categories 
-# ----------------------
+# Age categories 
 # <70, 70-80, 80+
 df1$agelt70 <- ifelse(df1$Nage < 70, 1, 0)
 df1$age7080 <- ifelse(df1$Nage >= 70 & df1$Nage < 80 , 1, 0)
 df1$agege80 <- ifelse(df1$Nage >= 80, 1, 0)
-
-# dim(df1)  # [1] 12556   116
 
 # Expand dataset
 df.expanded <- df1[rep(row.names(df1), df1$RAKEDW0), 1:114] 
@@ -50,19 +48,17 @@ wpct(chis$agege80) # 0.7924979 0.2075021
 
 wpct(chis$bmilt25) # 0.6027671 0.3972329
 wpct(chis$bmi2530) # 0.6132905 0.3867095
-#wpct(chis$bmigt30) # 0.7940445 0.2059555
 wpct(chis$bmige30) # 0.7839424 0.2160576
-
 
 table(chis$Edu_harm1) # 62599  389523  356556 1352941 1081071 1380067
 
-
+# ---- Raking ----
 # Un-raked dataset set-up 
 # Creates a survey design object wo any weights
 # ids argument means the data came all from one single primary sampling unit
 adc.svy.unweighted <- svydesign(ids=~1, data=adc)
 
-# Variables to be raked (so we need their marginal probabilities from CHIS)
+# Variables to be raked ( we need their marginal probabilities from CHIS)
 # Compute weights based on the distribution of sex, education, age, and race
 # Each dataframe consists of two vectors: one describing the level of the associated factor
 # and the other the corresponding frequencies
@@ -97,21 +93,6 @@ bmige30.dist <- data.frame(bmige30 = c("0", "1"),
 
 
 # Get the raked weights 
-# sample.margins contans a list of simple formulas that tell R that the marginal distributions
-# of interest are male, race, agelt70, etc
-# population.margins specifies the marginal distributions as they are to be found in CHIS
-
-# Demographic vars only (we ended up having poor cov balance on some more, so not
-# using these raked weights)
-# adc.svy.rake <- rake(design = adc.svy.unweighted,
-#                      sample.margins = list(~male, ~race,
-#                                            ~agelt70, ~age7080, ~agege80,
-#                                            ~Edu_harm1),
-#                      population.margins = list(male.dist, race.dist,
-#                                                agelt70.dist, age7080.dist, agege80.dist,
-#                                                Edu_harm1.dist)
-# )
-
 adc.svy.rake <- rake(design = adc.svy.unweighted,
                      sample.margins = list(~male, ~race,
                                            ~agelt70, ~age7080, ~agege80,
@@ -123,14 +104,9 @@ adc.svy.rake <- rake(design = adc.svy.unweighted,
                                                bmilt25.dist, bmi2530.dist, bmige30.dist)
 )
 
-# Distribution of the weights
-summary(weights(adc.svy.rake))
-
 # Collect the weights from adc.svy.rake object and add them to our dataset (ADC)
 raked.weight <- adc.svy.rake$postStrata[[1]][[1]] %>% attributes() %>%. [["weights"]]
 adc$raked.weight <- raked.weight
 
 # Write CSV file
-write.csv(adc, file="ADC_raked_09_092219.csv")
-
-setwd("/Users/kristinadang/Dropbox/Meena_ERM_MMG/Reweighting_ADC/Kristina/Code")
+write.csv(adc, file="C:/Users/ehlarson/Box/KD_bootstrapping/Scripts_26Jan2022/results/Raking_09_26Jan2022.csv")
