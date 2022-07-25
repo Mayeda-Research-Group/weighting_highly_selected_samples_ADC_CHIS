@@ -33,8 +33,8 @@ j_Cluster_Computing_Analysis.R
 xxx
 
 k_Cluster_Computing_Submission_Scripts
->>a_....
->>b_....
+a_submit_bootstrap.sh: this file xxxx
+b_submit_bootstrap_missing_seeds.sh: this file xxx
 
 l_Cluster_Computing_Seed_Checking.R
 xxxx
