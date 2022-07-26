@@ -33,7 +33,7 @@ j_Cluster_Computing_Analysis.R
 This script selects 2,000 boostrapped stamples to estimate 95% CIs for ADC prevalence and inequality estimates under each weighting scheme. This script is run on the computing cluster. 
 
 k_Cluster_Computing_Submission_Scripts   
-This folder includes two scripts (a_submit_bootstrap.sh and b_submit_bootstrap_missing_seeds.sh) that are used to push the code on the computing cluster.
+This folder includes two scripts (a_submit_bootstrap.sh and b_submit_bootstrap_missing_seeds.sh) that are used to push the j_Cluster_Computing_Analysis.R script to the computing cluster.
 
 l_Cluster_Computing_Seed_Checking.R  
 This script checks seeds for cluster computing.
