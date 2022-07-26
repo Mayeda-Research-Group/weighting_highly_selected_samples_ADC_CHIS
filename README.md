@@ -1,6 +1,6 @@
 # weighting_highly_selected_samples
 
-Scrips for the project "Accounting for selection probabilities in health research: Are estimates of inequalities similar across weighting schemes?" The scripts listed below were used to construct the harmonized analytic dataset, estimate prevalences and inequalities in CHIS (target population sample), calculate weights using different weighting schemes, apply the weighting schemes to ADC (highly-selected sample), display the results in tables and graphs, and scripts for running code on computing cluster. The scripts are listed in order and briefly described. 
+Scripts for the project "Accounting for selection probabilities in health research: Are estimates of inequalities similar across weighting schemes?" The scripts listed below were used to construct the harmonized analytic dataset, estimate prevalences and inequalities in CHIS (target population sample), calculate weights using different weighting schemes, apply the weighting schemes to ADC (highly-selected sample), display the results in tables and graphs, and scripts for running code on computing cluster. The scripts are listed in order and briefly described. 
 
 a_Harmonizing_ADC.sas  
 This script provides data management of the ADC data in order to create harmonized variables ready to be merged with CHIS.
