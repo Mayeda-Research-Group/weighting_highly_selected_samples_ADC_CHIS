@@ -39,7 +39,7 @@ l_Cluster_Computing_Seed_Checking.R
 This script checks seeds for cluster computing.
 
 m_Format_to_Graphics.R
-This script prepares output for tables and figures and outputs some results tables. 
+This script prepares output for tables and figures and outputs some manuscript tables. 
 
 n_Creating_Figures_Graphs.Rmd
-This script generates figures and some results tables.
+This script generates manuscript figures and additional manuscript tables.
