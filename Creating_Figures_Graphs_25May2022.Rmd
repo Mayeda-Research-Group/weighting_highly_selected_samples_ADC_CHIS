@@ -1,0 +1,867 @@
+---
+title: "Estimating Bias Induced by Sample Selection: A Comparison of Five Weighting Schemes for a Highly Selected Sample"
+subtitle: "Graphical Comparisons of Weighting Schemes"
+author: "Audrey R Murchland (edited by ERM 1/19/2020) (edited by KVD 2/14/2022)"
+date: "2/4/2019"
+output: 
+  html_document:
+    theme: flatly
+    toc: TRUE
+    toc_float: TRUE
+    toc_depth: 3
+    
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=FALSE, message=FALSE, warning=FALSE)
+```
+
+```{r Pacman statement}
+if (!require("pacman")) install.packages("pacman", repos='http://cran.us.r-project.org'); library(pacman)
+p_load("tidyverse", "knitr", "kableExtra", "magrittr", "reshape2", "here", "sas7bdat", "ggplot2", "dplyr", "kableExtra", "tables", "huxtable", "RColorBrewer", "latex2exp","scales", "openxlsx", "grid", "gtable", "gridExtra", "tableone", "Tabstat", "survey")
+options(digits = 3)
+options(scipen = 999)
+```
+#Audrey's To Dos:
+-
+
+```{r Pulling data}
+#path_to_box: Updating the path here will update everything throughout the script
+
+# #EHL's path
+#  path_to_box <- "C:/Users/ehlarson/Box/"
+
+#CS path
+path_to_box <- "/Users/crystalshaw/Library/CloudStorage/Box-Box/JZ_CS/"
+
+results <- read.csv(paste0(path_to_box, "KD_bootstrapping/Scripts_18May2022/Output/all_weights052522.csv")) %>% dplyr::select(-X)
+results$model2 <- factor(results$model2,levels = c("CHIS Weighted", "ADC super learner", "ADC SL GBM", "ADC Logistic","ADC Raked","ADC Unweighted" ))
+scaleFUN <- function(x) sprintf("%.2f", x)
+results$Labels[results$model2=="ADC Unweighted"] <- "ADC - equal weights" 
+results$Labels[results$model2=="ADC SL GBM"] <- "ADC - sIOSW,\nalgorithm: GBM" 
+results$Labels[results$model2=="ADC Logistic"] <- "ADC - sIOSW,\nalgorithm: logistic regression" 
+results$Labels[results$model2=="ADC Raked"] <- "ADC - raking weights" 
+results$Labels[results$model2=="ADC super learner"] <- "ADC - sIOSW,\nalgorithm: super learner" 
+results$Labels[results$model2=="CHIS Weighted"] <- "CHIS*"
+results$Labels <- factor(results$Labels, levels = c("ADC - equal weights", "ADC - raking weights", "ADC - sIOSW,\nalgorithm: logistic regression" ,"ADC - sIOSW,\nalgorithm: GBM" , "ADC - sIOSW,\nalgorithm: super learner" , "CHIS*" ))
+
+#aTable 8 no longer included in the manuscript
+OddsRatios <- results %>% filter(Statistic=='Odds Ratio', Stdpop == "stdchis") %>% mutate(Group2 = case_when(Group=="Black" ~ "Black vs. White", 
+                                                                                                             Group=="Latino" ~ "Latino vs. White"))
+write.csv(OddsRatios, file=paste0(path_to_box, "KD_bootstrapping/Scripts_18May2022/Final graphics/Manuscript_aTables8_052522.csv"))
+
+PrevRatios <- results %>% 
+  filter(Statistic == 'Rel Risk', Stdpop == "stdchis", 
+         !model2 %in% c("ADC super learner", "ADC SL GBM")) %>% 
+  mutate("CI width" = UpperCL - LowerCL) %>% 
+  relocate("CI width", .after = UpperCL) %>% 
+  mutate_at("Labels", as.character) %>%
+  mutate(Group2 = case_when(Group == "Black" ~ "Black vs. White",
+                            Group == "Latino" ~ "Latino vs. White")) 
+
+#change labels
+PrevRatios[which(PrevRatios$Labels == "ADC - equal weights"), "Labels"] <- "ADC - unweighted"
+PrevRatios[PrevRatios$Labels == 
+             "ADC - sIOSW,\nalgorithm: logistic regression", "Labels"] <- "ADC - sIOSW"
+PrevRatios[PrevRatios$Labels == "CHIS*", "Labels"] <- "CHIS"
+
+PrevRatios %<>% 
+  mutate_at("Labels", function(x) factor(x, levels = c("ADC - unweighted", 
+                                                       "ADC - raking weights", 
+                                                       "ADC - sIOSW", "CHIS")))
+
+
+write.csv(PrevRatios %>% arrange(Group2, Labels), 
+          file=paste0(path_to_box, "KD_bootstrapping/Scripts_18May2022/Final graphics/Manuscript_aTable5_052522.csv"))
+```
+#Comparisons of Applied Weighting Schemes
+
+##Figure: Stabilized Weights
+<br>
+<br>
+```{r Densities for stabilized weights, echo=FALSE, fig.align="center", fig.width=7, fig.height=5, eval=FALSE}
+#---- Pull in data ----
+#---- **Logistic results----
+l <- read.csv(paste0(path_to_box, "KD_bootstrapping/Scripts_18May2022/results/Logistic_09_26Jan2022.csv")) %>%
+  mutate(IOSW_l0 = ifelse(adc==0, 0, ((1-pp_logistic)/pp_logistic)*(p_adc)/(1-p_adc)),
+         IOSW_l1 = ifelse(adc==0, 1, ((1-pp_logistic)/pp_logistic)*(p_adc)/(1-p_adc)),
+         pp_l_rescale = pp_logistic*4622757/856) %>%
+  dplyr::select(ID, pp_logistic, IOSW_l0, IOSW_l1, pp_l_rescale) %>%
+  rename(IP_1 = pp_logistic)
+
+#---- **Raking results----
+r <- read.csv(paste0(path_to_box, "KD_bootstrapping/Scripts_18May2022/results/Raking_09_26Jan2022.csv")) %>%
+  dplyr::select(ID, raked.weight)
+
+#---- **GBM results----
+g <- read.csv(paste0(path_to_box, "KD_bootstrapping/Scripts_18May2022/results/GBM_09_26Jan2022.csv")) %>%
+  mutate(IOSW_g0 = ifelse(adc==0, 0, ((1-pp2_ADC)/pp2_ADC)*(p_adc)/(1-p_adc)),
+         IOSW_g1 = ifelse(adc==0, 1, ((1-pp2_ADC)/pp2_ADC)*(p_adc)/(1-p_adc)),
+         pp_g_rescale = pp2_ADC*4622757/856) %>%
+  dplyr::select(ID, pp2_CHIS, pp2_ADC, IOSW_g0, IOSW_g1, pp_g_rescale)
+
+#---- **super learner results----
+s <- read.csv(paste0(path_to_box, "KD_bootstrapping/Scripts_18May2022/results/SL_09_26Jan2022.csv")) %>%
+  mutate(IOSW_s0 = ifelse(adc==0, 0, ((1-pp_SL)/pp_SL)*(p_adc)/(1-p_adc)),
+         IOSW_s1 = ifelse(adc==0, 1, ((1-pp_SL)/pp_SL)*(p_adc)/(1-p_adc)),
+         pp_s_rescale = pp_SL*4622757/856)
+
+s_l <- left_join(s,l)
+s_l_r <- left_join(s_l, r)
+density <- left_join(s_l_r, g) %>% dplyr::select("raked.weight", "IOSW_l0") %>%
+  pivot_longer(everything())
+
+#relabel names
+density[which(density$name == "raked.weight"), "name"] <- "Raking weights"
+density[which(density$name == "IOSW_l0"), "name"] <- "sIOSW"
+
+#---- **plot stats ----
+ann_text <- 
+  data.frame(name = c("Raking weights", "sIOSW"), 
+             value = c(10, 30), density = c(0.5, 0.5),
+             label = c("Mean = 1.00\nSD = 1.37", "Mean = 1.17\nSD = 3.01"))
+
+#---- plot ----
+ggplot(density, aes(x = value)) + geom_density() + 
+  labs(x = "stabilized weight", y = "density") +
+  scale_x_continuous(expand = c(0, 0), oob = rescale_none, 
+                     minor_breaks = NULL) +
+  coord_cartesian(clip = "off") + 
+  facet_grid(cols = vars(name), scales = "free") + theme_bw() + 
+  geom_text(data = ann_text, size = 4,
+            mapping = aes(x = value, y = density, label = label), hjust = 0) +
+  theme(strip.text = element_text(size = 15),
+        plot.title = element_text(color = "black", face = "bold"),
+        axis.title.x = element_text(color = "black", size = 16, vjust = -1.5),
+        axis.text.x = element_text(size = 12),
+        axis.title.y = element_text(color = "black", size = 16),
+        axis.text.y = element_text(size = 12),
+        legend.title = element_blank(), legend.position = c(.85,.90), 
+        legend.text = element_text(size = 14),
+        plot.margin = margin(4, 1, 1, .1, "cm"), 
+        plot.background = element_rect(fill = "white"), 
+        panel.spacing.y = unit(4, "mm")) 
+
+aspect_ratio <- 1.25
+ggsave(filename = paste0(path_to_box, 'KD_bootstrapping/Scripts_18May2022/Final graphics/PLOTS/figure3_stabilized_weight_dist.png'), plot = last_plot(), 
+       height = 7, width = 8*aspect_ratio)
+```
+
+
+##Odds Ratios
+<br>
+<br>
+```{r Odds Ratio Plots, echo=FALSE, fig.align="center", fig.width=7, fig.height=5}
+OddsRatios$textY = 0.60
+OddsRatios_m <- OddsRatios %>% mutate(LowerCL_l = ifelse(LowerCL < 0.80, 0.80, LowerCL), UpperCL_l = ifelse(UpperCL > 4.2, 4.2, UpperCL), 
+                                      UpperCL_d = ifelse(UpperCL > 4.2, 4.2, NA))
+or <- ggplot(OddsRatios_m, aes(x=Labels, y=Value)) + 
+  geom_point(size = 10, alpha = 0.75, aes(fill=model3),colour="black", pch=21) +
+  theme(aspect.ratio = 2) +
+  geom_errorbar(aes(ymin=LowerCL_l, ymax=UpperCL_l),
+                size=.8,    # Thinner lines
+                width=.2, 
+                position=position_dodge(.9)) +
+  labs(x="", y="Estimated Odds Ratio (95% CI)") + 
+  ggtitle("Hypertension Odds Ratios based on each weighting scheme") +
+  scale_y_continuous(trans = "log", breaks=c(0.8,1.0,1.2,1.5,1.8,2.2,2.7,3.3,4.1), labels=scaleFUN, limit=c(0.8,4.2),expand=c(0,0), minor_breaks=NULL) +
+  guides(fill=FALSE) +
+  scale_fill_manual(values=c("G1"="white", "G2"="red1", "G3"="turquoise1","G4"="gold1","G6"="orchid1","G5"="black")) +
+  theme_bw() +
+  geom_text(aes(label=scaleFUN(Value)),hjust=.50, vjust=-1.25, size=6) + 
+  theme(axis.text.x = element_text(angle = 0, hjust = 0.5, size=17, color="black"), plot.title = element_text(hjust=0.5), axis.text.y=element_text(size=20, color="black")) +
+  geom_hline(yintercept=1) + 
+  scale_x_discrete(limits=rev(levels(OddsRatios$Labels))) +
+  coord_flip() + 
+  theme(panel.spacing= unit(3.0, "lines"))+
+  theme(axis.text.y = element_text(hjust = 0)) + 
+  facet_wrap(~ Group2) +
+  # geom_segment(aes(x = 2, xend = 2, y = Value, yend = UpperCL_d), arrow = arrow(length = unit(0.5, "cm"))) + # SL arrow Black
+  geom_segment(aes(x = 3, xend = 3, y = Value, yend = UpperCL_d), arrow = arrow(length = unit(0.5, "cm"))) + # GBM arrow Black
+  geom_segment(aes(x = 4, xend = 4, y = Value, yend = UpperCL_d), arrow = arrow(length = unit(0.5, "cm"))) #log arrow Black
+
+or2 <- or + theme(strip.text = element_text(size=23),
+                  plot.title = element_text(color="black", size=25, face="bold"),
+                  axis.title.x = element_text(color="black", size=23, vjust=-3.0),
+                  axis.title.y = element_text(color="black", size=16),
+                  plot.margin = margin(1,1,1,.1,"cm"), plot.background = element_rect(fill="white")
+)
+plot(or2)
+aspect_ratio <- 1.5
+ggsave(filename=paste0(path_to_box, 'KD_bootstrapping/Scripts_18May2022/Final graphics/PLOTS/OR_052522.png'), plot=or2, height=7,width = 10 * aspect_ratio )
+```
+<br>
+<br>
+
+##Figure 4: Prevalence Ratios
+<br>
+<br>
+```{r Prevalence Ratio Plots, echo=FALSE, fig.align="center", out.width="75%", out.height="75%"}
+PrevRatios$textY = 0.90
+
+pr <- ggplot(PrevRatios, aes(x=Labels, y=Value)) + 
+  geom_point(size = 10, alpha = 0.75, aes(fill=model3),colour="black", pch=21)+
+  theme(aspect.ratio = 2) +
+  geom_errorbar(aes(ymin=LowerCL, ymax=UpperCL),
+                size=.8,    # Thinner lines
+                width=.2,
+                position=position_dodge(.9)) +
+  labs(x="", y="Estimated Prevalence Ratio (95% CI)") +
+  #ggtitle("Hypertension Prevalence Ratios based on each weighting scheme") +
+  scale_y_continuous(trans = "log", breaks=c(0.8,1.0,1.2,1.5,1.8,2.2), labels=scaleFUN, limit=c(0.8,2.2),expand=c(0,0), minor_breaks=NULL) +
+  guides(fill="none") +
+  scale_fill_manual(values=c("G1"="white", "G2"="red1", "G3"="turquoise1","G5"="black")) +
+  theme_bw() +
+  geom_text(aes(label=Value),hjust=.50, vjust=-1.25, size=6) +  
+  theme(axis.text.x = element_text(angle = 0, hjust = 0.5, size=17, color="black"), plot.title = element_text(hjust=0.5), axis.text.y=element_text(size=20, color="black")) +
+  geom_hline(yintercept=1) + 
+  scale_x_discrete(limits=rev(levels(PrevRatios$Labels))) +
+  coord_flip() + 
+  theme(panel.spacing= unit(3.0, "lines"))+
+  theme(axis.text.y = element_text(hjust = 0)) + 
+  facet_wrap(~ Group2) 
+# geom_segment(aes(x = 2, xend = 2, y = Value, yend = UpperCL_d), arrow = arrow(length = unit(0.5, "cm")))+
+# geom_segment(aes(x = 4, xend = 4, y = Value, yend = UpperCL_d), arrow = arrow(length = unit(0.5, "cm")))
+pr2 <- pr + theme(strip.text = element_text(size=23),
+                  plot.title = element_text(color="black", size=25, face="bold"),
+                  axis.title.x = element_text(color="black", size=23, vjust=-3.0),
+                  axis.title.y = element_text(color="black", size=16),
+                  plot.margin = margin(1,1,1,.1,"cm"), plot.background = element_rect(fill = "white")
+)
+plot(pr2)
+aspect_ratio <- 1.5
+ggsave(filename=paste0(path_to_box, 'KD_bootstrapping/Scripts_18May2022/Final graphics/PLOTS/figure4_PR_052522.png'), plot=pr2,  height=7,width = 10 * aspect_ratio )
+```
+<br>
+<br>
+
+##Figure 5: Prevalence Differences
+```{r Prev Diff Data}
+# resultspd <- read.sas7bdat("/Users/audreymurchland/Box Sync/UCD Health Cognition/Data/ADC-CHIS_DATA/Applied_Weights/all_weights092219.sas7bdat")
+# resultspd$model2 <- factor(resultspd$model2,levels = c("CHIS Weighted", "ADC super learner", "ADC SL GBM", "ADC Logistic","ADC Raked","ADC Unweighted" ))
+# scaleFUN <- function(x) sprintf("%.1f", x)
+# resultspd$Labels[resultspd$model2=="ADC Unweighted"] <- "ADC - equal weights" 
+# resultspd$Labels[resultspd$model2=="ADC SL GBM"] <- "ADC - sIOSW,\nalgorithm: GBM" 
+# resultspd$Labels[resultspd$model2=="ADC Logistic"] <- "ADC - sIOSW,\nalgorithm: logistic regression" 
+# resultspd$Labels[resultspd$model2=="ADC Raked"] <- "ADC - raking weights" 
+# resultspd$Labels[resultspd$model2=="ADC super learner"] <- "ADC - sIOSW,\nalgorithm: super learner" 
+# resultspd$Labels[resultspd$model2=="CHIS Weighted"] <- "CHIS*"
+# resultspd$Labels <- factor(resultspd$Labels, levels = c("ADC - equal weights", "ADC - raking weights", "ADC - sIOSW,\nalgorithm: logistic regression" ,"ADC - sIOSW,\nalgorithm: GBM" , "ADC - sIOSW,\nalgorithm: super learner" , "CHIS*" ))
+# PrevDiff <- resultspd %>% filter(Statistic=='Risk Diff')
+# PrevDiff$Value2 <- PrevDiff$Value*100
+# PrevDiff$LowerCL2 <- PrevDiff$LowerCL*100
+# PrevDiff$UpperCL2 <- PrevDiff$UpperCL*100
+PrevDiff <- results %>% 
+  filter(Statistic=='Risk Diff', Stdpop == "stdchis", 
+         !model2 %in% c("ADC super learner", "ADC SL GBM")) %>% 
+  mutate(Group2 = case_when(Group=="Black" ~ "Black vs. White", 
+                            Group=="Latino" ~ "Latino vs. White")) %>% 
+  mutate("CI width" = UpperCL - LowerCL) %>% 
+  relocate("CI width", .after = UpperCL) %>% 
+  mutate_at("Labels", as.character) 
+
+#change labels
+PrevDiff[which(PrevDiff$Labels == "ADC - equal weights"), "Labels"] <- 
+  "ADC - unweighted"
+PrevDiff[PrevDiff$Labels == 
+           "ADC - sIOSW,\nalgorithm: logistic regression", "Labels"] <- "ADC - sIOSW"
+PrevDiff[PrevDiff$Labels == "CHIS*", "Labels"] <- "CHIS"
+
+PrevDiff %<>% 
+  mutate_at("Labels", function(x) factor(x, levels = c("ADC - unweighted", 
+                                                       "ADC - raking weights", 
+                                                       "ADC - sIOSW", "CHIS")))
+scaleFUN <- function(x) sprintf("%.1f", x)
+write.csv(PrevDiff %>% arrange(Group2, Labels), 
+          file=paste0(path_to_box, "KD_bootstrapping/Scripts_18May2022/Final graphics/Manuscript_aTable6_052522.csv"))
+```
+<br>
+<br>
+```{r Prevalence Difference Plots, echo=FALSE, fig.align="center", out.width="75%", out.height="75%"}
+PrevDiff$textY = -6.5
+PrevDiff_m <- 
+  PrevDiff %>% mutate(LowerCL_l = ifelse(LowerCL < -.10, -.10, LowerCL), 
+                      UpperCL_l = ifelse(UpperCL > .35, .35, UpperCL), 
+                      UpperCL_d = ifelse(UpperCL > .35, .35, NA))
+
+#remove GBM and superlearner results
+filtered_data <- 
+  PrevDiff_m %>% filter(!model2 %in% c("ADC super learner", "ADC SL GBM")) %>% 
+  mutate_at("Labels", as.character) 
+
+#change labels
+filtered_data[which(filtered_data$Labels == "ADC - equal weights"), "Labels"] <- 
+  "ADC - unweighted"
+filtered_data[filtered_data$Labels == 
+                "ADC - sIOSW,\nalgorithm: logistic regression", "Labels"] <- 
+  "ADC - sIOSW"
+filtered_data[filtered_data$Labels == "CHIS*", "Labels"] <- "CHIS"
+
+filtered_data %<>% 
+  mutate_at("Labels", function(x) factor(x, levels = c("ADC - unweighted", 
+                                                       "ADC - raking weights", 
+                                                       "ADC - sIOSW", "CHIS")))
+#Creating Datasets for CI arrows for Black participants only (have to apply after doing facet wrap)
+#Black UCL Logistic
+# data.seglg<-data.frame(x=4, xend=4, y=19.4, yend = 30.0, Group="Black", model3="G2")
+#Black UCL GBM
+# data.seggbm<-data.frame(x=3, xend=3, y=15.0, yend = 30.0, Group="Black", model3="G6")
+pd <- ggplot(filtered_data, aes(x=Labels, y=Value*100, fill=model3)) + 
+  geom_point(size = 10, alpha = 0.75, aes(fill=model3),colour="black", pch=21)+
+  theme(aspect.ratio = 2) +
+  geom_errorbar(aes(ymin=LowerCL_l*100, ymax=UpperCL_l*100),
+                size=.8,    # Thinner lines
+                width=.2,
+                position=position_dodge(.9)) +
+  labs(x="", y="Estimated Prevalence Difference (95% CI)") +
+  #ggtitle("Hypertension Prevalence Differences based on each weighting scheme") +
+  scale_y_continuous(breaks=seq(-5,35,5), labels=scaleFUN, limit=c(-5,35),expand=c(0,0), minor_breaks =NULL) +
+  theme_bw() +
+  guides(fill="none") +
+  scale_fill_manual(values=c("G1"="white", "G2"="red1", "G3"="turquoise1","G5"="black")) +
+  theme_bw()+
+  geom_text(aes(label=scaleFUN(Value*100)),hjust=.50, vjust=-1.25, size=6) + 
+  theme(axis.text.x = element_text(angle = 0, hjust = 0.5, size=17, color="black"), plot.title = element_text(hjust=0.5), axis.text.y=element_text(size=18, color="black")) +
+  geom_hline(yintercept=0) + 
+  scale_x_discrete(limits=rev(levels(filtered_data$Labels))) +
+  coord_flip() + 
+  theme(panel.spacing= unit(3.0, "lines"))+
+  theme(axis.text.y = element_text(hjust = 0)) + 
+  #geom_segment(aes(x = 3, xend = 3, y = Value*100, yend = UpperCL_d*100), arrow = arrow(length = unit(0.5, "cm")))  +
+  # geom_segment(aes(x = 2, xend = 2, y = Value*100, yend = UpperCL_d*100), arrow = arrow(length = unit(0.5, "cm"))) +
+  facet_wrap(~ Group2) #+
+# geom_segment(data=data.seglg, 
+#              aes(x = x, xend = xend, y = y, yend = yend), inheret.aes=FALSE, arrow = arrow(length = unit(0.5, "cm"))) + 
+# geom_segment(data=data.seggbm, 
+#              aes(x = x, xend = xend, y = y, yend = yend), inheret.aes=FALSE, arrow = arrow(length = unit(0.5, "cm")))
+pd2 <- pd + theme(strip.text = element_text(size=23),
+                  plot.title = element_text(color="black", size=25, face="bold", vjust = 3.0),
+                  axis.title.x = element_text(color="black", size=23, vjust=-3.0),
+                  axis.title.y = element_text(color="black", size=16), 
+                  plot.margin = margin(1,1,1,.1, "cm"), plot.background = element_rect(fill="white")
+)
+plot(pd2)
+aspect_ratio <- 1.5
+ggsave(filename=paste0(path_to_box, 'KD_bootstrapping/Scripts_18May2022/Final graphics/PLOTS/figure5_PD_052522.png'), plot=pd2, height=7,width = 10 * aspect_ratio )
+```
+<br>
+<br>
+
+##Figure 3: Prevalences
+```{r Prev Data}
+Prev <- results %>% 
+  filter(Statistic == 'Prevalence' & Group != "Overall", Stdpop == "unstd", 
+         !model2 %in% c("ADC super learner", "ADC SL GBM")) %>% 
+  mutate("CI width" = UpperCL - LowerCL) %>% 
+  relocate("CI width", .after = UpperCL) %>% 
+  mutate_at("Labels", as.character)
+
+#change labels
+Prev[which(Prev$Labels == "ADC - equal weights"), "Labels"] <- "ADC - unweighted"
+Prev[Prev$Labels == 
+       "ADC - sIOSW,\nalgorithm: logistic regression", "Labels"] <- "ADC - sIOSW"
+Prev[Prev$Labels == "CHIS*", "Labels"] <- "CHIS"
+
+Prev %<>% 
+  mutate_at("Labels", function(x) factor(x, levels = c("ADC - unweighted", 
+                                                       "ADC - raking weights", 
+                                                       "ADC - sIOSW", "CHIS")))
+
+
+scaleFUN <- function(x) sprintf("%.1f", x)
+write.csv(Prev %>% arrange(Group, Labels), 
+          file=paste0(path_to_box, "KD_bootstrapping/Scripts_18May2022/Final graphics/Manuscript_aTable4a_052522.csv"))
+
+Prev2 <- results %>% 
+  filter(Statistic=='Prevalence' & Group!="Overall", Stdpop == "stdchis", 
+         !model2 %in% c("ADC super learner", "ADC SL GBM")) %>% 
+  mutate("CI width" = UpperCL - LowerCL) %>% 
+  relocate("CI width", .after = UpperCL) %>% 
+  mutate_at("Labels", as.character)
+
+#change labels
+Prev2[which(Prev2$Labels == "ADC - equal weights"), "Labels"] <- "ADC - unweighted"
+Prev2[Prev2$Labels == 
+        "ADC - sIOSW,\nalgorithm: logistic regression", "Labels"] <- "ADC - sIOSW"
+Prev2[Prev2$Labels == "CHIS*", "Labels"] <- "CHIS"
+
+Prev2 %<>% 
+  mutate_at("Labels", function(x) factor(x, levels = c("ADC - unweighted", 
+                                                       "ADC - raking weights", 
+                                                       "ADC - sIOSW", "CHIS")))
+
+scaleFUN <- function(x) sprintf("%.1f", x)
+write.csv(Prev2 %>% arrange(Group, Labels), file=paste0(path_to_box, "KD_bootstrapping/Scripts_18May2022/Final graphics/Manuscript_aTable4b_052522.csv"))
+```
+<br>
+<br>
+```{r Prevalence Plots, echo=FALSE, fig.align="center", out.width="75%", out.height="75%"}
+Prev$textY = 43
+
+p <- ggplot(Prev,
+            aes(x = Labels, y = Value, fill = model3)) + 
+  geom_point(size = 6, alpha = 0.75, aes(fill = model3),colour = "black", pch=21) +
+  theme(aspect.ratio = 2) +
+  geom_errorbar(aes(ymin=LowerCL, ymax=UpperCL),
+                size=.8,    # Thinner lines
+                width=.2, 
+                position=position_dodge(.9)) +
+  labs(x="",y="Estimated Prevalence (95% CI)") +
+  #ggtitle("Estimated Hypertension Prevalence based on each weighting scheme") +
+  scale_y_continuous(limit=c(30,90),expand=c(0,0),labels=scaleFUN, oob = rescale_none, minor_breaks = NULL) +
+  guides(fill="none") +
+  scale_fill_manual(values=c("G1"="white", "G2"="red1", 
+                             "G3"="turquoise1","G5"="black")) +
+  theme_bw() +
+  geom_text(aes(label=scaleFUN(Value)),hjust=.50, vjust=-1.25, size=6) + 
+  theme(axis.text.x = element_text(angle = 0, hjust = 0.5, size=17, color="black"), plot.title = element_text(hjust=0.5), axis.text.y=element_text(size=20, color="black")) +
+  # geom_hline(yintercept=40) + # vertical line at 40--remove
+  scale_x_discrete(limits=rev(levels(Prev$Labels))) +
+  coord_flip() + 
+  theme(panel.spacing= unit(3.0, "lines"))+
+  theme(axis.text.y = element_text(hjust = 0)) + 
+  facet_wrap(~ Group)
+p2 <- p + theme(strip.text = element_text(size=23),
+                plot.title = element_text(color="black", size=25, face="bold"),
+                axis.title.x = element_text(color="black", size=23, vjust=-3.0),
+                axis.title.y = element_text(color="black", size=16),
+                plot.margin = margin(1,1,1,.1,"cm"), plot.background = element_rect(fill="white")
+)
+plot(p2)
+aspect_ratio <- 1.5
+ggsave(filename=paste0(path_to_box, 'KD_bootstrapping/Scripts_18May2022/Final graphics/PLOTS/figure3_Prev_052522.png'), plot=p2, height=7,width = 10 * aspect_ratio )
+```
+<br>
+<br>
+
+#Areas of Common Support
+In this section, we evaluate potential positivity violations using density plots showing propensity score overlap. The current graphs below show the distribution of the weights for each weighting scheme. They need to be updated with the propensity score instead of the weights.
+```{r ACS Data}
+density <- read.csv(paste0(path_to_box, "KD_bootstrapping/Scripts_18May2022/Output/weights_comb_short_0214222.csv")) %>% dplyr::select(-X)
+```
+<br>
+<br>
+
+##eFigure 2: Logistic Propensity Balance
+-make text larger (numeric values)
+-more space between x-axis labels and x-axis numbering
+-once all are plotted, then determine scale range
+-consider knitting together three plots (stacked vertically) > all three should fit on one page, with room for title, space between, and footnotes
+
+```{r Overall ACS Plot, echo=FALSE, fig.align="center", out.width="75%", out.height="75%"}
+density$adclog[density$adc==0] <- " CHIS participant" 
+density$adclog[density$adc==1] <- " ADC  participant"
+density$adclog <- factor(density$adclog,levels = c(" ADC  participant"," CHIS participant"))
+density$IP_2 <- density$IP_1*(4622757/856) #we are multiplying the propensity scores by the ratio of sample sizes for interpretability -- ERM note 1/21/2020: CHIS weighted sample size updated.
+denlog<-ggplot(density, aes(x = IP_2, fill = adclog)) + geom_density(alpha = 0.5) + 
+  labs(x="rescaled propensity score for ADC participation \nestimated from sIOSW", y="density")+
+  scale_x_continuous(limit=c(0,20),expand=c(0,0), oob = rescale_none, minor_breaks = NULL) +
+  scale_y_continuous(breaks=c(0.0,0.5,1.0,1.5,2.0), limit=c(0,2.0),expand=c(0,0), minor_breaks=NULL) +
+  scale_fill_manual(values=c(" CHIS participant" ="grey88", " ADC  participant"="red1")) +
+  # geom_text (x=0, y=2.25, inherit.aes=FALSE, label="A.", check_overlap=TRUE, hjust=0, size=6) +
+  #"Density Plot of Propensity Scores for ADC Participation \n estimated from logistic regression"
+  coord_cartesian(clip = "off") +
+  theme_bw()
+denlog2 <- denlog + theme(strip.text = element_text(size=15),
+                          plot.title = element_text(color="black", face="bold"),
+                          axis.title.x = element_text(color="black", size=16, vjust=-1.5),
+                          axis.text.x = element_text(size=12),
+                          axis.title.y = element_text(color="black", size=16),
+                          axis.text.y = element_text(size=12),
+                          legend.title=element_blank(), legend.position = c(.85,.75), legend.text = element_text(size=14),
+                          plot.margin = margin(4,1,1,.1,"cm"), plot.background = element_rect(fill="white")
+)
+plot(denlog2)
+aspect_ratio <- 1.25
+ggsave(filename=paste0(path_to_box, 'KD_bootstrapping/Scripts_18May2022/Final graphics/PLOTS/eFigure2a_Den_Log_021422.png'), plot=denlog2, height=7,width = 8 * aspect_ratio  )
+```
+
+<br>
+<br>
+
+```{r Stratified ACS Plot, echo=FALSE, fig.align="center", out.width="75%", out.height="75%"}
+density$adclog[density$adc==0] <- " CHIS participant" 
+density$adclog[density$adc==1] <- " ADC  participant"
+density$adclog <- factor(density$adclog,levels = c(" ADC  participant"," CHIS participant"))
+density$IP_2 <- density$IP_1*(4622757/856) #we are multiplying the propensity scores by the ratio of sample sizes for interpretability -- ERM note 1/21/2020: CHIS weighted sample size updated.
+
+plot_labels <- 
+  data.frame(race = c("Black", "Latino", "White"), label = c("A. ", "", ""), 
+             adclog = 1) %>% mutate_at("adclog", as.factor)
+
+denlog_strat<-ggplot(density, aes(x = IP_2, fill = adclog)) + geom_density(alpha = 0.5) + 
+  labs(x="stratified rescaled propensity score for ADC participation \nestimated from sIOSW", y="density")+
+  scale_x_continuous(limit=c(0,20),expand=c(0,0), oob = rescale_none, minor_breaks = NULL) +
+  # scale_y_continuous(breaks=c(0.0,0.5,1.0,1.5,2.0), limit=c(0,2.0),expand=c(0,0), minor_breaks=NULL) +
+  scale_fill_manual(values=c(" CHIS participant" ="grey88", " ADC  participant"="red1")) +
+  #"Density Plot of Propensity Scores for ADC Participation \n estimated from logistic regression"
+  coord_cartesian(clip = "off") + 
+  facet_grid(rows = vars(race), scale = "free") + theme_bw()  
+# geom_text(x = 0, y = 0.2, aes(label = label), data = plot_labels, 
+#           check_overlap = TRUE, hjust = 0, size = 6)
+
+denlog2_strat <- denlog_strat + 
+  theme(strip.text = element_text(size=15),
+        plot.title = element_text(color="black", face="bold"),
+        axis.title.x = element_text(color="black", size=16, vjust=-1.5),
+        axis.text.x = element_text(size=12),
+        axis.title.y = element_text(color="black", size=16),
+        axis.text.y = element_text(size=12),
+        legend.title=element_blank(), legend.position = c(.85,.90), legend.text = element_text(size=14),
+        plot.margin = margin(4,1,1,.1,"cm"), plot.background = element_rect(fill="white"), 
+        panel.spacing.y = unit(4, "mm")) 
+plot(denlog2_strat)
+aspect_ratio <- 1.25
+ggsave(filename=paste0(path_to_box, 'KD_bootstrapping/Scripts_18May2022/Final graphics/PLOTS/eFigure2b_Den_Log_021422_strat.png'), plot=denlog2_strat, height=9,width = 8 * aspect_ratio  )
+```
+
+<br>
+<br>
+
+
+GBM Propensity Balance
+```{r GBM ACS Plot, echo=FALSE, fig.align="center", out.width="75%", out.height="75%", eval = FALSE}
+density$adcgbm[density$adc==0] <- " CHIS participant" 
+density$adcgbm[density$adc==1] <- " ADC  participant"
+density$adcgbm <- factor(density$adcgbm,levels = c(" ADC  participant"," CHIS participant"))
+density$pp2_ADC2 <- density$pp2_ADC*(4622757/856) #we are multiplying the propensity scores by the ratio of sample sizes for interpretability -- ERM note 1/21/2020: CHIS weighted sample size updated.
+dengbm<-ggplot(density, aes(x = pp2_ADC2, fill = adcgbm)) + geom_density(alpha = 0.5) + 
+  labs(x="rescaled propensity score for ADC participation \nestimated from GBM", y="density") +
+  scale_x_continuous(limit=c(0,20),expand=c(0,0), oob = rescale_none, minor_breaks = NULL) +
+  scale_y_continuous(breaks=c(0.0,0.5,1.0,1.5,2.0), limit=c(0,2.0),expand=c(0,0), minor_breaks=NULL) +
+  scale_fill_manual(values=c(" CHIS participant" ="grey88", " ADC  participant"="orchid1")) +
+  geom_text (x=0, y=2.25, inherit.aes=FALSE, label="B.", check_overlap=TRUE, hjust=0, size=6) +
+  #"Density Plot of Propensity Scores for ADC Participation \n estimated from logistic regression"
+  coord_cartesian(clip = "off") +
+  theme_bw()
+dengbm2 <- dengbm + theme(strip.text = element_text(size=15),
+                          plot.title = element_text(color="black", face="bold"),
+                          axis.title.x = element_text(color="black", size=16, vjust=-1.5),
+                          axis.text.x = element_text(size=12),
+                          axis.title.y = element_text(color="black", size=16),
+                          axis.text.y = element_text(size=12),
+                          legend.title=element_blank(), legend.position = c(.85,.75), legend.text = element_text(size=14),
+                          plot.margin = margin(4,1,1,.1,"cm"), plot.background = element_rect(fill="white")
+)
+plot(dengbm2)
+aspect_ratio <- 1.25
+ggsave(filename=paste0(path_to_box, 'KD_bootstrapping/Scripts_18May2022/Final graphics/PLOTS/Den_GBM_021422.png'), plot=dengbm2, height=7,width = 8 * aspect_ratio  )
+```
+<br>
+<br>
+
+```{r Stratified GBM ACS Plot, echo=FALSE, fig.align="center", out.width="75%", out.height="75%", eval = FALSE}
+density$adcgbm[density$adc==0] <- " CHIS participant" 
+density$adcgbm[density$adc==1] <- " ADC  participant"
+density$adcgbm <- factor(density$adcgbm,levels = c(" ADC  participant"," CHIS participant"))
+density$pp2_ADC2 <- density$pp2_ADC*(4622757/856) #we are multiplying the propensity scores by the ratio of sample sizes for interpretability -- ERM note 1/21/2020: CHIS weighted sample size updated.
+
+plot_labels <- 
+  data.frame(race = c("Black", "Latino", "White"), label = c("B. ", "", ""), 
+             adcgbm = 1) %>% mutate_at("adcgbm", as.factor)
+
+dengbm_strat<-ggplot(density, aes(x = pp2_ADC2, fill = adcgbm)) + geom_density(alpha = 0.5) + 
+  labs(x="stratified rescaled propensity score for ADC participation \nestimated from GBM", y="density") +
+  scale_x_continuous(limit=c(0,20),expand=c(0,0), oob = rescale_none, minor_breaks = NULL) +
+  # scale_y_continuous(breaks=c(0.0,0.5,1.0,1.5,2.0), limit=c(0,2.0),expand=c(0,0), minor_breaks=NULL) +
+  scale_fill_manual(values=c(" CHIS participant" ="grey88", " ADC  participant"="orchid1")) +
+  #"Density Plot of Propensity Scores for ADC Participation \n estimated from logistic regression"
+  coord_cartesian(clip = "off") + facet_grid(rows = vars(race), scales = "free") + theme_bw() + 
+  geom_text(x = 0, y = 0.225, aes(label = label), data = plot_labels, 
+            check_overlap = TRUE, hjust = 0, size = 6)
+
+dengbm2_strat <- dengbm_strat + theme(strip.text = element_text(size=15),
+                                      plot.title = element_text(color="black", face="bold"),
+                                      axis.title.x = element_text(color="black", size=16, vjust=-1.5),
+                                      axis.text.x = element_text(size=12),
+                                      axis.title.y = element_text(color="black", size=16),
+                                      axis.text.y = element_text(size=12),
+                                      legend.title=element_blank(), legend.position = c(.85,.90), legend.text = element_text(size=14),
+                                      plot.margin = margin(4,1,1,.1,"cm"), plot.background = element_rect(fill="white"), panel.spacing.y = unit(4, "mm")
+)
+plot(dengbm2_strat)
+aspect_ratio <- 1.25
+ggsave(filename=paste0(path_to_box, 'KD_bootstrapping/Scripts_18May2022/Final graphics/PLOTS/Den_GBM_021422_strat.png'), plot=dengbm2_strat, height=7,width = 8 * aspect_ratio  )
+```
+
+super learner Propensity Balance
+```{r SL ACS Plot, echo=FALSE, fig.align="center", out.width="75%", out.height="75%", eval = FALSE}
+density$adcsl[density$adc==0] <- " CHIS participant" 
+density$adcsl[density$adc==1] <- " ADC  participant"
+density$adcsl <- factor(density$adcsl,levels = c(" ADC  participant", " CHIS participant"))
+density$pp_SL2 <- density$pp_SL*(4622757/856) #we are multiplying the propensity scores by the ratio of sample sizes for interpretability -- ERM note 1/21/2020: CHIS weighted sample size updated.
+densl<-ggplot(density, aes(x = pp_SL2, fill = adcsl)) + geom_density(alpha = 0.5) + 
+  labs(x="rescaled propensity score for ADC participation \nestimated from super learner", y="density") +
+  scale_x_continuous(limit=c(0,20),expand=c(0,0), oob = rescale_none, minor_breaks = NULL) +
+  scale_y_continuous(breaks=c(0.0,0.5,1.0,1.5,2.0), limit=c(0,2.0),expand=c(0,0), minor_breaks=NULL) +
+  scale_fill_manual(values=c(" CHIS participant" ="grey88", " ADC  participant"="gold1")) +
+  geom_text (x=0, y=2.25, inherit.aes=FALSE, label="C.", check_overlap=TRUE, hjust=0, size=6) +
+  #"Density Plot of Propensity Scores for ADC Participation \n estimated from logistic regression"
+  coord_cartesian(clip = "off") +
+  theme_bw()
+densl2 <- densl + theme(strip.text = element_text(size=15),
+                        plot.title = element_text(color="black", face="bold"),
+                        axis.title.x = element_text(color="black", size=16, vjust=-1.5),
+                        axis.text.x = element_text(size=12),
+                        axis.title.y = element_text(color="black", size=16),
+                        axis.text.y = element_text(size=12),
+                        legend.title=element_blank(), legend.position = c(.85,.75), legend.text = element_text(size=14),
+                        plot.margin = margin(4,1,1,.1,"cm"), plot.background = element_rect(fill="white")
+)
+plot(densl2)
+aspect_ratio <- 1.25
+ggsave(filename=paste0(path_to_box, 'KD_bootstrapping/Scripts_18May2022/Final graphics/PLOTS/Den_SL_021422.png'), plot=densl2, height=7,width = 8 * aspect_ratio  )
+##ADD Footnote at the bottom of all three that we have trimmed the scale from 0-20!!
+```
+
+```{r stratified SL ACS Plot, echo=FALSE, fig.align="center", out.width="75%", out.height="75%", eval = FALSE}
+density$adcsl[density$adc==0] <- " CHIS participant" 
+density$adcsl[density$adc==1] <- " ADC  participant"
+density$adcsl <- factor(density$adcsl,levels = c(" ADC  participant", " CHIS participant"))
+density$pp_SL2 <- density$pp_SL*(4622757/856) #we are multiplying the propensity scores by the ratio of sample sizes for interpretability -- ERM note 1/21/2020: CHIS weighted sample size updated.
+
+plot_labels <- 
+  data.frame(race = c("Black", "Latino", "White"), label = c("C. ", "", ""), 
+             adcsl = 1) %>% mutate_at("adcsl", as.factor)
+
+densl_strat<-ggplot(density, aes(x = pp_SL2, fill = adcsl)) + geom_density(alpha = 0.5) + 
+  labs(x="stratified rescaled propensity score for ADC participation \nestimated from super learner", y="density") +
+  scale_x_continuous(limit=c(0,20),expand=c(0,0), oob = rescale_none, minor_breaks = NULL) +
+  # scale_y_continuous(breaks=c(0.0,0.5,1.0,1.5,2.0), limit=c(0,2.0),expand=c(0,0), minor_breaks=NULL) +
+  scale_fill_manual(values=c(" CHIS participant" ="grey88", " ADC  participant"="gold1")) +
+  #"Density Plot of Propensity Scores for ADC Participation \n estimated from logistic regression"
+  coord_cartesian(clip = "off") + facet_grid(rows = vars(race), scales = "free") + theme_bw() + 
+  geom_text(x = 0, y = 0.19, aes(label = label), data = plot_labels, 
+            check_overlap = TRUE, hjust = 0, size = 6)
+
+densl2_strat <- densl_strat + theme(strip.text = element_text(size=15),
+                                    plot.title = element_text(color="black", face="bold"),
+                                    axis.title.x = element_text(color="black", size=16, vjust=-1.5),
+                                    axis.text.x = element_text(size=12),
+                                    axis.title.y = element_text(color="black", size=16),
+                                    axis.text.y = element_text(size=12),
+                                    legend.title=element_blank(), legend.position = c(.85,.90), legend.text = element_text(size=14),
+                                    plot.margin = margin(4,1,1,.1,"cm"), plot.background = element_rect(fill="white"), panel.spacing.y = unit(4, "mm")
+)
+plot(densl2_strat)
+aspect_ratio <- 1.25
+ggsave(filename=paste0(path_to_box, 'KD_bootstrapping/Scripts_18May2022/Final graphics/PLOTS/Den_SL_021422_strat.png'), plot=densl2_strat, height=7,width = 8 * aspect_ratio  )
+##ADD Footnote at the bottom of all three that we have trimmed the scale from 0-20!!
+```
+
+
+```{r Comb Den Plot, echo=FALSE, fig.align="center", out.width="75%", out.height="75%", eval = FALSE}
+g <- grid.arrange(denlog2,dengbm2,densl2,ncol=1)
+plot(g)
+aspect_ratio <- 1.25
+ggsave(filename=paste0(path_to_box, 'KD_bootstrapping/Scripts_18May2022/Final graphics/PLOTS/Den_ALL_021422.png'), plot=g, height=12,width = 6 * aspect_ratio  )
+```
+<br>
+<br>
+
+```{r stratified Comb Den Plot, echo=FALSE, fig.align="center", out.width="75%", out.height="75%", eval = FALSE}
+g <- grid.arrange(denlog2_strat,dengbm2_strat,densl2_strat,ncol=1)
+plot(g)
+aspect_ratio <- 1.25
+ggsave(filename=paste0(path_to_box, 'KD_bootstrapping/Scripts_18May2022/Final graphics/PLOTS/Den_ALL_021422_strat.png'), plot=g, height=20,width = 8 * aspect_ratio  )
+```
+<br>
+<br>
+#Covariate Balance Plots
+## Figure 2: Covariate balance
+```{r Cov Balance Plot v1, echo=FALSE, fig.align="center", out.width="75%", out.height="75%"}
+all_paths <- 
+  list.files(path = paste0(path_to_box,
+                           "KD_bootstrapping/Scripts_18May2022/Output"), 
+             full.names = TRUE, pattern = "*.csv")
+
+results_paths <- all_paths[str_detect(all_paths, "SEseize_FULL")]
+
+df1 <- do.call(rbind, lapply(results_paths, read_csv)) %>% dplyr::select(-1)
+
+df1$Group[df1$Group == "GBM"] <- "sIOSW,\nalgorithm: GBM" 
+df1$Group[df1$Group == "LOGSLPT2"] <- "sIOSW" 
+df1$Group[df1$Group == "RAKED"] <- "Raking weights" 
+df1$Group[df1$Group == "SL"] <- "sIOSW,\nalgorithm: super learner" 
+df1$Group2 <- factor(df1$Group, 
+                     levels = c("Raking weights", "sIOSW",
+                                "sIOSW,\nalgorithm: GBM" , 
+                                "sIOSW,\nalgorithm: super learner"))
+df1$Covariate <- 
+  factor(df1$Covariate, 
+         levels = df1 %>% filter(Model == "Unweighted", race_label == "all") %>%
+           group_by(Covariate) %>% slice_head(n = 1) %>% arrange(desc(Effect_Size)) %>% dplyr::select(Covariate) %>% unlist())
+
+#combined plot
+CVB <- ggplot(df1 %>% filter(race_label == "all" & 
+                               Group2 %in% c("Raking weights", "sIOSW")), 
+              aes(x = Covariate, y = -1*Effect_Size), group = Model) + 
+  facet_wrap(~Group2, nrow = 1) + 
+  geom_hline(yintercept = 0, size = 1) +
+  geom_point(size = 3, aes(colour = factor(Model), shape = factor(Model), 
+                           fill = factor(Model))) +
+  ylab("Standardized mean difference") +
+  # ggtitle("Covariate Balance") + 
+  scale_y_continuous(breaks=round(seq(-0.6, 0.8, by = 0.2), 2), 
+                     limit=c(-0.6, 0.8), minor_breaks=NULL) +
+  scale_shape_manual(values=c("LOGSLPT2"=24,"GBM"=24,"SL"=24,"RAKED"=24,"Unweighted"=1)) +
+  scale_colour_manual(values=c("black","black","black","black","black")) +
+  scale_fill_manual(values=c("Unweighted"="white", "LOGSLPT2"="red1","GBM"="orchid1", "SL"="gold1", "RAKED"="turquoise1")) + 
+  theme_bw() +
+  theme(axis.title.y=element_blank()) + 
+  theme(legend.position = "none") + 
+  theme(aspect.ratio = 5/3) +
+  coord_flip()
+CVB2 <- CVB + theme(strip.text = element_text(size=18),
+                    axis.title.x = element_text(color="black", size=20, vjust=-3.0),
+                    axis.text.x = element_text(size=16),
+                    axis.text.y = element_text(size=16),
+                    plot.margin = margin(.5,.5,.5,.5,"cm"), plot.background = element_rect(fill="white"))
+plot(CVB2)
+ggsave(filename=paste0(path_to_box, 'KD_bootstrapping/Scripts_18May2022/Final graphics/PLOTS/figure2_v1_CovBalance_FULL_021422.png'), plot=CVB2, width = 18, height=8, dpi=800  )
+```
+
+```{r Cov Balance Plot v2, echo=FALSE, fig.align="center", out.width="75%", out.height="75%"}
+all_paths <- 
+  list.files(path = paste0(path_to_box,
+                           "KD_bootstrapping/Scripts_18May2022/Output"), 
+             full.names = TRUE, pattern = "*.csv")
+
+results_paths <- all_paths[str_detect(all_paths, "SEseize_FULL")]
+
+df1 <- do.call(rbind, lapply(results_paths, read_csv)) %>% dplyr::select(-1)
+
+df1$Group[df1$Group == "GBM"] <- "sIOSW,\nalgorithm: GBM" 
+df1$Group[df1$Group == "LOGSLPT2"] <- "sIOSW" 
+df1$Group[df1$Group == "RAKED"] <- "Raking weights" 
+df1$Group[df1$Group == "SL"] <- "sIOSW,\nalgorithm: super learner" 
+df1$Group2 <- factor(df1$Group, 
+                     levels = c("Raking weights", "sIOSW",
+                                "sIOSW,\nalgorithm: GBM" , 
+                                "sIOSW,\nalgorithm: super learner"))
+df1$Covariate <- 
+  factor(df1$Covariate, 
+         levels = df1 %>% filter(Model == "Unweighted", race_label == "all") %>%
+           group_by(Covariate) %>% slice_head(n = 1) %>% arrange(desc(Effect_Size)) %>% dplyr::select(Covariate) %>% unlist())
+
+#combined plot
+CVB <- ggplot(df1 %>% filter(race_label == "all" & 
+                               Group2 %in% c("Raking weights", "sIOSW")), 
+              aes(x = Covariate, y = -1*Effect_Size), group = Model) + 
+  geom_hline(yintercept = 0, size = 1) +
+  geom_point(size = 3, aes(colour = factor(Model), shape = factor(Model), 
+                           fill = factor(Model))) +
+  ylab("Standardized mean difference") +
+  # ggtitle("Covariate Balance") + 
+  scale_y_continuous(breaks=round(seq(-0.6, 0.8, by = 0.2), 2), 
+                     limit=c(-0.6, 0.8), minor_breaks=NULL) +
+  scale_shape_manual(name = "Weighting Scheme", 
+                     values=c("Unweighted" = 1, "RAKED" = 24, "LOGSLPT2" = 24), 
+                     labels = c("Unweighted", "Raking Weights", "sIOSW")) +
+  scale_colour_manual(name = "Weighting Scheme", 
+                      values = c("black", "black", "black"), 
+                      labels = c("Unweighted", "Raking Weights", "sIOSW")) +
+  scale_fill_manual(name = "Weighting Scheme", 
+                    values = c("Unweighted" = "white", "RAKED" = "turquoise1", 
+                               "LOGSLPT2" = "red1"), 
+                    labels = c("Unweighted", "Raking Weights", "sIOSW")) +
+  theme_bw() +
+  theme(axis.title.y=element_blank()) + 
+  theme(aspect.ratio = 5/3) +
+  coord_flip() + 
+  theme(legend.position = "bottom")  
+CVB2 <- CVB + theme(strip.text = element_text(size=18),
+                    axis.title.x = element_text(color="black", size=20, vjust=-2.0),
+                    axis.text.x = element_text(size=16),
+                    axis.text.y = element_text(size=16),
+                    plot.margin = margin(.5,.5,.5,.5,"cm"), plot.background = element_rect(fill="white"))
+plot(CVB2)
+ggsave(filename=paste0(path_to_box, 'KD_bootstrapping/Scripts_18May2022/Final graphics/PLOTS/figure2_v2_CovBalance_FULL_021422.png'), plot=CVB2, width = 18, height=8, dpi=800  )
+```
+
+##eFigure 1: Stratified Covariate Balance
+```{r Stratified Cov Balance Plot v1, echo=FALSE, fig.align="center", out.width="75%", out.height="75%"}
+#stratified plot
+CVB_strat <- ggplot(df1 %>% filter(!race_label == "all" & 
+                                     Group2 %in% c("Raking weights", "sIOSW")), aes(x=Covariate, y=-1*Effect_Size), group=Model) + 
+  facet_grid(rows = vars(race_label), cols = vars(Group2)) + 
+  geom_hline(yintercept = 0, size = 1) +
+  geom_point(size=3, aes(colour=factor(Model), shape=factor(Model), fill=factor(Model))) +
+  ylab("Standardized mean difference") +
+  scale_y_continuous(breaks=round(seq(-0.6, 0.8, by = 0.2), 2), 
+                     limit=c(-0.6, 0.8), minor_breaks=NULL) +
+  scale_shape_manual(values=c("LOGSLPT2"=24,"GBM"=24,"SL"=24,"RAKED"=24,"Unweighted"=1)) +
+  scale_colour_manual(values=c("black","black","black","black","black")) +
+  scale_fill_manual(values=c("Unweighted"="white", "LOGSLPT2"="red1","GBM"="orchid1", "SL"="gold1", "RAKED"="turquoise1")) + 
+  theme_bw() +
+  theme(axis.title.y=element_blank()) + 
+  theme(legend.position = "none") + 
+  theme(aspect.ratio = 5/3) +
+  coord_flip()
+CVB2_strat <- CVB_strat + theme(strip.text = element_text(size=18),
+                                axis.title.x = element_text(color="black", size=20, vjust=-3.0),
+                                axis.text.x = element_text(size=16),
+                                axis.text.y = element_text(size=16),
+                                plot.margin = margin(.5,.5,.5,.5,"cm"), plot.background = element_rect(fill="white"))
+plot(CVB2_strat)
+ggsave(filename=paste0(path_to_box, 'KD_bootstrapping/Scripts_18May2022/Final graphics/PLOTS/efigure1_v1_CovBalance_FULL_021422_strat.png'), plot=CVB2_strat, width = 25, height=20, dpi=800  )
+```
+
+```{r Stratified Cov Balance Plot v2, echo=FALSE, fig.align="center", out.width="75%", out.height="75%"}
+#stratified plot
+CVB_strat <- ggplot(df1 %>% filter(!race_label == "all" & 
+                                     Group2 %in% c("Raking weights", "sIOSW")), aes(x=Covariate, y=-1*Effect_Size), group=Model) + 
+  facet_grid(cols = vars(race_label), rows = vars(Group2)) + 
+  geom_hline(yintercept = 0, size = 1) +
+  geom_point(size=3, aes(colour=factor(Model), shape=factor(Model), fill=factor(Model))) +
+  ylab("Standardized mean difference") +
+  scale_y_continuous(breaks=round(seq(-0.6, 0.8, by = 0.2), 2), 
+                     limit=c(-0.6, 0.8), minor_breaks=NULL) +
+  scale_shape_manual(values=c("LOGSLPT2"=24,"GBM"=24,"SL"=24,"RAKED"=24,"Unweighted"=1)) +
+  scale_colour_manual(values=c("black","black","black","black","black")) +
+  scale_fill_manual(values=c("Unweighted"="white", "LOGSLPT2"="red1","GBM"="orchid1", "SL"="gold1", "RAKED"="turquoise1")) + 
+  theme_bw() +
+  theme(axis.title.y=element_blank()) + 
+  theme(legend.position = "none") + 
+  theme(aspect.ratio = 5/3) +
+  coord_flip()
+CVB2_strat <- CVB_strat + theme(strip.text = element_text(size=18),
+                                axis.title.x = element_text(color="black", size=20, vjust=-3.0),
+                                axis.text.x = element_text(size=16),
+                                axis.text.y = element_text(size=16),
+                                plot.margin = margin(.5,.5,.5,.5,"cm"), plot.background = element_rect(fill="white"))
+plot(CVB2_strat)
+ggsave(filename=paste0(path_to_box, 'KD_bootstrapping/Scripts_18May2022/Final graphics/PLOTS/efigure1_v2_CovBalance_FULL_021422_strat.png'), plot=CVB2_strat, width = 25, height=20, dpi=800  )
+```
+
+```{r Stratified Cov Balance Plot v3, echo=FALSE, fig.align="center", out.width="75%", out.height="75%"}
+#stratified plot
+CVB_strat <- ggplot(df1 %>% filter(!race_label == "all" & 
+                                     Group2 %in% c("Raking weights", "sIOSW")), aes(x=Covariate, y=-1*Effect_Size), group=Model) + 
+  facet_grid(cols = vars(race_label)) + 
+  geom_hline(yintercept = 0, size = 1) +
+  geom_point(size=3, aes(colour=factor(Model), shape=factor(Model), fill=factor(Model))) + ylab("Standardized mean difference") +
+  scale_y_continuous(breaks=round(seq(-0.6, 0.8, by = 0.2), 2), 
+                     limit=c(-0.6, 0.8), minor_breaks=NULL) +
+  scale_shape_manual(name = "Weighting Scheme", 
+                     values=c("Unweighted" = 1, "RAKED" = 24, "LOGSLPT2" = 24), 
+                     labels = c("Unweighted", "Raking Weights", "sIOSW")) +
+  scale_colour_manual(name = "Weighting Scheme", 
+                      values = c("black", "black", "black"), 
+                      labels = c("Unweighted", "Raking Weights", "sIOSW")) +
+  scale_fill_manual(name = "Weighting Scheme", 
+                    values = c("Unweighted" = "white", "RAKED" = "turquoise1", 
+                               "LOGSLPT2" = "red1"), 
+                    labels = c("Unweighted", "Raking Weights", "sIOSW")) + 
+  theme_bw() +
+  theme(axis.title.y=element_blank()) + 
+  theme(aspect.ratio = 5/3) +
+  coord_flip() + theme(legend.position = "bottom")
+CVB2_strat <- CVB_strat + theme(strip.text = element_text(size=18),
+                                axis.title.x = element_text(color="black", size=20,
+                                                            vjust=-2.0),
+                                axis.text.x = element_text(size=16),
+                                axis.text.y = element_text(size=16),
+                                plot.margin = margin(.75,.75,.75,.75,"cm"), plot.background = element_rect(fill="white"))
+plot(CVB2_strat)
+ggsave(filename=paste0(path_to_box, 'KD_bootstrapping/Scripts_18May2022/Final graphics/PLOTS/efigure1_v3_CovBalance_FULL_021422_strat.png'), plot=CVB2_strat, width = 25, height=20, dpi=800)
+```
